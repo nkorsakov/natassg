@@ -1,0 +1,59 @@
+name: natassg
+
+services:
+  natassg-web:
+    build:
+      context: .docker/nginx
+    volumes:
+      - ./:/var/www
+    ports:
+      - "80:80"
+    depends_on:
+      - natassg-app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - natassgnetwork
+
+  natassg-app:
+    build:
+      context: .docker/php
+      args:
+        PUID: "1000"
+        PHP_INSTALL_XDEBUG: "true"
+        INSTALL_GIT: "true"
+        PHP_XDEBUG_PORT: "9001"
+    volumes:
+      - ./:/var/www
+      - .docker/php/xdebug_custom.ini:/usr/local/etc/php/conf.d/51-xdebug-custom.ini
+    environment:
+      - PHP_IDE_CONFIG=serverName=localhost
+      - COMPOSER_MEMORY_LIMIT=-1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - natassgnetwork
+
+  natassg-database:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: natassg
+      MYSQL_USER: natassg
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - natassg-mysql-data:/var/lib/mysql
+    networks:
+      - natassgnetwork
+
+networks:
+  natassgnetwork:
+    driver: bridge
+
+volumes:
+  natassg-mysql-data:
