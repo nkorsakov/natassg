@@ -3,8 +3,13 @@ import { computed, ref, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import { useDisplay, useTheme } from 'vuetify';
 import TaskCreateDialog from '@/Components/TaskCreateDialog.vue';
+import TaskDetailDialog from '@/Components/TaskDetailDialog.vue';
+import EventDetailDialog from '@/Components/EventDetailDialog.vue';
+import AdvanceDetailDialog from '@/Components/AdvanceDetailDialog.vue';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
+import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
 
 const props = defineProps({
     title: { type: String, default: 'SkyDesk' },
@@ -12,29 +17,42 @@ const props = defineProps({
     showFab: { type: Boolean, default: true },
 });
 
-const emit = defineEmits(['create-task', 'create-advance']);
-
 const { mdAndUp } = useDisplay();
 const theme = useTheme();
 const { isDark } = useAppearance();
+const store = useSkyDeskStore();
+const {
+    taskOpen,
+    taskId,
+    eventOpen,
+    eventId,
+    advanceOpen,
+    advanceId,
+    quickCreateOpen,
+    quickCreateEventId,
+    openTask,
+    openEvent,
+    openAdvance,
+    openQuickCreate,
+} = useWorkspaceUi();
 const page = usePage();
 const drawer = ref(true);
-const taskDialog = ref(false);
 
 watch(mdAndUp, (v) => {
     drawer.value = v;
 }, { immediate: true });
 
-const items = [
+const items = computed(() => [
     { title: 'Главная', icon: 'mdi-home-outline', href: '/dashboard', badge: null },
-    { title: 'Поручения', icon: 'mdi-check-circle-outline', href: '/tasks', badge: 8 },
+    { title: 'Поручения', icon: 'mdi-check-circle-outline', href: '/tasks', badge: store.activeTaskCount.value },
     { title: 'Календарь', icon: 'mdi-calendar-month-outline', href: '/calendar', badge: null },
-    { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: 3 },
-];
+    { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: store.pendingAdvanceCount.value || null },
+]);
 
 const currentPath = computed(() => page.url.split('?')[0]);
 const crumb = computed(() => {
-    const hit = items.find((i) => i.href === currentPath.value);
+    if (currentPath.value === '/settings') return 'Настройки';
+    const hit = items.value.find((i) => i.href === currentPath.value);
     return hit?.title ?? props.title;
 });
 
@@ -47,15 +65,21 @@ const todayLabel = computed(() =>
 );
 
 const primaryColor = computed(() => theme.current.value.colors.primary);
+const profile = computed(() => store.profile.value);
 
 const isActive = (href) => currentPath.value === href;
 const go = (href) => router.visit(href);
 
-const openCreate = () => {
-    taskDialog.value = true;
+const openCreate = () => openQuickCreate();
+const openSettings = () => router.visit('/settings');
+
+const onTaskCreated = (id) => openTask(id);
+
+const onEventCreateTask = (eventIdForLink) => {
+    openQuickCreate(eventIdForLink);
 };
 
-defineExpose({ openCreate });
+defineExpose({ openCreate, openTask, openEvent, openAdvance });
 </script>
 
 <template>
@@ -125,11 +149,11 @@ defineExpose({ openCreate });
                     </v-btn>
                     <div class="d-flex align-center ga-3 mt-5 pt-4 skydesk-drawer__user">
                         <v-avatar size="31" color="primary">
-                            <span class="text-caption font-weight-bold">АМ</span>
+                            <span class="text-caption font-weight-bold">{{ profile.initials }}</span>
                         </v-avatar>
                         <div class="flex-grow-1 min-w-0">
-                            <div class="text-body-2 font-weight-bold">Анна М.</div>
-                            <div class="skydesk-drawer__role">Личный помощник</div>
+                            <div class="text-body-2 font-weight-bold">{{ profile.name }}</div>
+                            <div class="skydesk-drawer__role">{{ profile.role }}</div>
                         </div>
                         <v-btn
                             icon
@@ -138,6 +162,7 @@ defineExpose({ openCreate });
                             class="skydesk-drawer__settings"
                             aria-label="Настройки"
                             title="Настройки"
+                            @click="openSettings"
                         >
                             <v-icon size="20">mdi-cog-outline</v-icon>
                         </v-btn>
@@ -240,7 +265,29 @@ defineExpose({ openCreate });
             <v-icon size="32">mdi-plus</v-icon>
         </v-btn>
 
-        <TaskCreateDialog v-model="taskDialog" @created="emit('create-task', $event)" />
+        <TaskCreateDialog
+            v-model="quickCreateOpen"
+            :event-id="quickCreateEventId"
+            @created="onTaskCreated"
+        />
+        <TaskDetailDialog
+            v-model="taskOpen"
+            :task-id="taskId"
+            @open-task="openTask"
+            @open-event="openEvent"
+            @open-advance="openAdvance"
+        />
+        <EventDetailDialog
+            v-model="eventOpen"
+            :event-id="eventId"
+            @open-task="openTask"
+            @create-task="onEventCreateTask"
+        />
+        <AdvanceDetailDialog
+            v-model="advanceOpen"
+            :advance-id="advanceId"
+            @open-task="openTask"
+        />
     </v-app>
 </template>
 

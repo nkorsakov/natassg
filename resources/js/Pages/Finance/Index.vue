@@ -1,101 +1,142 @@
 <script setup>
-import { ref } from 'vue';
-import { useDisplay } from 'vuetify';
+import { computed, ref } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
 
-defineProps({
-    summary: { type: Array, default: () => [] },
-    advances: { type: Array, default: () => [] },
+const store = useSkyDeskStore();
+const { openAdvance, openTask } = useWorkspaceUi();
+
+const filter = ref('all');
+
+const filters = [
+    { value: 'all', label: 'Все' },
+    { value: 'pending', label: 'На согласовании' },
+    { value: 'issued', label: 'Выдано' },
+    { value: 'reporting', label: 'На отчёте' },
+    { value: 'closed', label: 'Закрыто' },
+];
+
+const visible = computed(() => {
+    if (filter.value === 'all') return store.advances.value;
+    if (filter.value === 'issued') {
+        return store.advances.value.filter((a) => ['issued', 'approved'].includes(a.status_id));
+    }
+    return store.advances.value.filter((a) => a.status_id === filter.value);
 });
 
-const { mdAndUp } = useDisplay();
-const tab = ref('active');
+const summary = computed(() => {
+    const pending = store.advances.value
+        .filter((a) => a.status_id === 'pending')
+        .reduce((s, a) => s + a.amount, 0);
+    const issued = store.advances.value
+        .filter((a) => ['issued', 'reporting', 'approved'].includes(a.status_id))
+        .reduce((s, a) => s + a.amount, 0);
+    const closed = store.advances.value
+        .filter((a) => a.status_id === 'closed')
+        .reduce((s, a) => s + a.amount, 0);
+    return [
+        { label: 'Ожидает одобрения', amount: store.formatMoney(pending), tone: 'orange' },
+        { label: 'В обороте', amount: store.formatMoney(issued), tone: null },
+        { label: 'Закрыто', amount: store.formatMoney(closed), tone: 'green' },
+    ];
+});
 
-const statusColor = (status) => {
-    if (status === 'pending') return 'warning';
-    if (status === 'approved') return 'primary';
-    if (status === 'ready') return 'success';
-    return 'secondary';
+const createAdvance = () => {
+    const adv = store.createAdvance({
+        title: 'Новая заявка на аванс',
+        amount: 10000,
+        status_id: 'pending',
+    });
+    openAdvance(adv.id);
 };
 </script>
 
 <template>
     <AppLayout
         title="Финансы"
-        subtitle="Авансовые заявки, выдача средств и отчетные расходы."
+        subtitle="Общий кошелёк, авансы и отчёт по тратам."
         :show-fab="false"
     >
         <template #actions>
-            <v-btn color="primary" prepend-icon="mdi-plus">Авансовая заявка</v-btn>
+            <v-btn color="primary" prepend-icon="mdi-cash-plus" @click="createAdvance">
+                Заявка на аванс
+            </v-btn>
         </template>
 
-        <div
-            class="mb-5"
-            :class="mdAndUp ? 'd-flex' : 'd-flex'"
-            :style="mdAndUp
-                ? 'gap:14px'
-                : 'gap:10px;overflow-x:auto;margin:0 -16px;padding:0 16px 5px'"
-        >
+        <v-card class="pa-5 mb-5 skydesk-accent-panel">
+            <div class="text-caption font-weight-bold text-primary mb-1">Общий кошелёк · на руках</div>
+            <div class="text-h4 font-weight-bold" style="font-family:Fraunces,Georgia,serif;letter-spacing:-.03em">
+                {{ store.formatMoney(store.wallet.value.balance) }}
+            </div>
+            <div class="text-caption text-medium-emphasis mt-1">
+                Выданные авансы минус возвраты / обнуления / перерасход
+            </div>
+        </v-card>
+
+        <div class="d-flex flex-wrap ga-3 mb-5">
             <v-card
-                v-for="card in summary"
-                :key="card.label"
+                v-for="s in summary"
+                :key="s.label"
                 class="pa-4"
-                :style="mdAndUp ? 'flex:1' : 'flex:0 0 153px'"
+                style="flex:1 1 160px;min-width:160px"
             >
-                <div class="text-caption text-medium-emphasis">{{ card.label }}</div>
+                <div class="text-caption text-medium-emphasis mb-1">{{ s.label }}</div>
                 <div
-                    class="text-h5 font-weight-bold mt-2"
-                    :class="{
-                        'text-warning': card.tone === 'orange',
-                        'text-success': card.tone === 'green',
-                    }"
+                    class="text-h6 font-weight-bold"
+                    :style="s.tone === 'orange' ? 'color:#E67E22' : s.tone === 'green' ? 'color:#37A878' : ''"
                 >
-                    {{ card.amount }}
+                    {{ s.amount }}
                 </div>
             </v-card>
         </div>
 
+        <div class="d-flex ga-2 mb-4 flex-wrap">
+            <v-chip
+                v-for="f in filters"
+                :key="f.value"
+                :color="filter === f.value ? 'primary' : undefined"
+                :variant="filter === f.value ? 'flat' : 'tonal'"
+                @click="filter = f.value"
+            >
+                {{ f.label }}
+            </v-chip>
+        </div>
+
         <v-card>
-            <div class="d-flex align-center justify-space-between px-5 pt-5 pb-2">
-                <h2 class="text-subtitle-1 font-weight-bold mb-0">Авансовые заявки</h2>
-                <v-btn variant="text" color="primary" size="small">Фильтры ▾</v-btn>
-            </div>
-
-            <v-tabs v-model="tab" color="primary" class="px-4">
-                <v-tab value="active">Активные · 4</v-tab>
-                <v-tab value="closed">Закрытые</v-tab>
-                <v-tab value="all">Все заявки</v-tab>
-            </v-tabs>
-
-            <v-divider />
-
-            <div class="px-4 py-2">
-                <div
-                    v-for="item in advances"
-                    :key="item.title"
-                    class="d-flex align-center ga-3 py-4"
-                    style="border-bottom:1px solid #f0f0f2"
-                >
-                    <div class="flex-grow-1" style="min-width:0">
-                        <div class="text-body-2 font-weight-bold">{{ item.title }}</div>
-                        <div class="text-caption text-medium-emphasis text-truncate mt-1">{{ item.desc }}</div>
+            <div
+                v-for="adv in visible"
+                :key="adv.id"
+                class="d-flex align-center ga-3 px-5 py-4 skydesk-task"
+                style="cursor:pointer;border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                @click="openAdvance(adv.id)"
+            >
+                <div class="flex-grow-1 min-w-0">
+                    <div class="text-body-1 font-weight-bold">{{ adv.title }}</div>
+                    <div class="text-caption text-medium-emphasis">
+                        {{ adv.note || 'Без описания' }}
+                        <template v-if="adv.task_id">
+                            ·
+                            <a
+                                class="text-primary"
+                                style="text-decoration:none;font-weight:700"
+                                @click.stop="openTask(adv.task_id)"
+                            >
+                                поручение
+                            </a>
+                        </template>
                     </div>
-                    <div class="text-body-2 font-weight-bold text-no-wrap">{{ item.amount }}</div>
+                </div>
+                <div class="text-right">
+                    <div class="font-weight-bold">{{ store.formatMoney(adv.amount) }}</div>
                     <v-chip
-                        v-if="mdAndUp"
-                        size="small"
-                        class="skydesk-pill"
-                        :color="statusColor(item.status)"
+                        size="x-small"
+                        class="skydesk-pill mt-1"
                         variant="tonal"
+                        :style="{ color: store.getAdvanceStatus(adv.status_id)?.color }"
                     >
-                        {{ item.statusLabel }}
+                        {{ store.getAdvanceStatus(adv.status_id)?.label }}
                     </v-chip>
-                    <div v-if="mdAndUp" class="text-caption text-medium-emphasis text-no-wrap" style="width:100px">
-                        {{ item.date }}
-                    </div>
-                    <v-btn icon variant="text" size="small" color="secondary">
-                        <v-icon>mdi-dots-horizontal</v-icon>
-                    </v-btn>
                 </div>
             </div>
         </v-card>
