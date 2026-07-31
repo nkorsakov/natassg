@@ -57,10 +57,7 @@ docker compose exec natassg-app php artisan storage:link
 npm install && npm run dev
 ```
 
-Демо-вход после сидера (пароль у обоих: `G00glemap`):
-
-- логин: `nkorsakov` (или `nkorsakov@skydesk.local`)
-- логин: `nataliya` (или `nataliya@skydesk.local`)
+После сидера создаются пользователи `nkorsakov` и `nataliya` (полный email: `…@skydesk.local`). Пароль задаётся в сидере / окружении, в README не публикуется.
 
 Сиды заполняют только словари и пользователей (с пустым кошельком). Поручения, события, авансы и контакты стартуют пустыми.
 
