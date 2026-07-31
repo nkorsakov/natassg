@@ -35,19 +35,27 @@ function save() {
     );
 }
 
-function apply(theme) {
-    theme.global.name.value = mode.value === 'dark' ? 'skydeskDark' : 'skydesk';
-
+function applyAccent(theme) {
     const accentColor = ACCENTS.find((a) => a.id === accent.value)?.color ?? ACCENTS[0].color;
-    for (const name of ['skydesk', 'skydeskDark']) {
+    for (const name of ['light', 'dark']) {
         const colors = theme.themes.value[name]?.colors;
         if (!colors) continue;
         colors.primary = accentColor;
         colors.info = accentColor;
     }
-
-    document.documentElement.dataset.theme = mode.value;
     document.documentElement.style.setProperty('--skydesk-accent', accentColor);
+}
+
+function apply(theme) {
+    const themeName = mode.value === 'dark' ? 'dark' : 'light';
+    if (typeof theme.change === 'function') {
+        theme.change(themeName);
+    } else {
+        theme.global.name.value = themeName;
+    }
+    applyAccent(theme);
+    document.documentElement.dataset.theme = mode.value;
+    document.documentElement.style.colorScheme = mode.value;
 }
 
 export function useAppearance() {
@@ -56,8 +64,12 @@ export function useAppearance() {
     if (!wired) {
         load();
         apply(theme);
-        watch([mode, accent], () => {
+        watch(mode, () => {
             apply(theme);
+            save();
+        });
+        watch(accent, () => {
+            applyAccent(theme);
             save();
         });
         wired = true;
@@ -69,7 +81,7 @@ export function useAppearance() {
     );
 
     const setMode = (value) => {
-        mode.value = value;
+        if (value === 'light' || value === 'dark') mode.value = value;
     };
 
     const toggleMode = () => {

@@ -98,45 +98,26 @@ const weekProgress = computed(() => {
                         v-for="task in visibleTasks"
                         :key="task.id"
                         class="skydesk-task d-flex align-center ga-3 px-4 py-3"
-                        style="border-radius:11px;min-height:64px;cursor:pointer"
+                        style="border-radius:11px;min-height:56px;cursor:pointer"
                         @click="openTask(task.id)"
                     >
-                        <div
-                            class="skydesk-stat-icon"
-                            :style="{ background: (store.getTaskType(task.type_id)?.color || '#6957EE') + '22' }"
-                        >
-                            <v-icon
-                                :icon="store.getTaskType(task.type_id)?.icon || 'mdi-checkbox-blank-circle-outline'"
-                                size="18"
-                                :color="store.getTaskType(task.type_id)?.color"
-                            />
-                        </div>
                         <div class="flex-grow-1 min-w-0">
                             <div class="text-body-2 font-weight-bold text-truncate">{{ task.title }}</div>
-                            <div class="text-caption text-medium-emphasis">
-                                {{ store.getTaskType(task.type_id)?.label }}
-                                · {{ formatDeadline(task.deadline) }}
-                                <span v-if="store.childrenOf(task.id).length">
-                                    · {{ store.childrenOf(task.id).length }} подзадач
-                                </span>
+                            <div class="text-caption text-medium-emphasis text-truncate">
+                                <template v-if="task.deadline">{{ formatDeadline(task.deadline) }}</template>
+                                <template v-if="store.childrenOf(task.id).length">
+                                    <span v-if="task.deadline"> · </span>
+                                    {{ store.childrenOf(task.id).length }} подзадач
+                                </template>
+                                <template v-if="!task.deadline && !store.childrenOf(task.id).length">
+                                    {{ store.getStatus(task.status_id)?.label }}
+                                </template>
                             </div>
                         </div>
                         <v-chip
                             size="small"
                             variant="tonal"
                             class="skydesk-pill"
-                            :style="{ color: store.getPriority(task.priority_id)?.color }"
-                        >
-                            {{ store.getPriority(task.priority_id)?.label }}
-                        </v-chip>
-                        <v-chip
-                            size="small"
-                            variant="flat"
-                            class="skydesk-pill"
-                            :style="{
-                                background: (store.getStatus(task.status_id)?.color || '#999') + '22',
-                                color: store.getStatus(task.status_id)?.color,
-                            }"
                         >
                             {{ store.getStatus(task.status_id)?.label }}
                         </v-chip>

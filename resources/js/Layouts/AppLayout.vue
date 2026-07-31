@@ -6,6 +6,7 @@ import TaskCreateDialog from '@/Components/TaskCreateDialog.vue';
 import TaskDetailDialog from '@/Components/TaskDetailDialog.vue';
 import EventDetailDialog from '@/Components/EventDetailDialog.vue';
 import AdvanceDetailDialog from '@/Components/AdvanceDetailDialog.vue';
+import ContactDetailDialog from '@/Components/ContactDetailDialog.vue';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
@@ -28,11 +29,14 @@ const {
     eventId,
     advanceOpen,
     advanceId,
+    contactOpen,
+    contactId,
     quickCreateOpen,
     quickCreateEventId,
     openTask,
     openEvent,
     openAdvance,
+    openContact,
     openQuickCreate,
 } = useWorkspaceUi();
 const page = usePage();
@@ -47,6 +51,7 @@ const items = computed(() => [
     { title: 'Поручения', icon: 'mdi-check-circle-outline', href: '/tasks', badge: store.activeTaskCount.value },
     { title: 'Календарь', icon: 'mdi-calendar-month-outline', href: '/calendar', badge: null },
     { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: store.pendingAdvanceCount.value || null },
+    { title: 'Контакты', icon: 'mdi-account-outline', href: '/contacts', badge: null },
 ]);
 
 const currentPath = computed(() => page.url.split('?')[0]);
@@ -79,7 +84,7 @@ const onEventCreateTask = (eventIdForLink) => {
     openQuickCreate(eventIdForLink);
 };
 
-defineExpose({ openCreate, openTask, openEvent, openAdvance });
+defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
 </script>
 
 <template>
@@ -287,6 +292,10 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance });
             v-model="advanceOpen"
             :advance-id="advanceId"
             @open-task="openTask"
+        />
+        <ContactDetailDialog
+            v-model="contactOpen"
+            :contact-id="contactId"
         />
     </v-app>
 </template>

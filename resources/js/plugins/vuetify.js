@@ -24,9 +24,9 @@ export default createVuetify({
         sets: { mdi },
     },
     theme: {
-        defaultTheme: 'skydesk',
+        defaultTheme: 'light',
         themes: {
-            skydesk: {
+            light: {
                 dark: false,
                 colors: {
                     ...shared,
@@ -38,7 +38,7 @@ export default createVuetify({
                     'on-background': '#191827',
                 },
             },
-            skydeskDark: {
+            dark: {
                 dark: true,
                 colors: {
                     ...shared,

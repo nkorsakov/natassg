@@ -1,5 +1,5 @@
 import { computed, reactive } from 'vue';
-import { createSeedState } from '@/mocks/seed';
+import { createSeedState, seedContacts } from '@/mocks/seed';
 
 const STORAGE_KEY = 'skydesk-store-v1';
 
@@ -14,8 +14,13 @@ function loadState() {
                     name: 'Наталия Я.',
                     initials: 'НЯ',
                 };
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             }
+            if (!Array.isArray(data.contacts)) {
+                data.contacts = structuredClone(seedContacts);
+            }
+            if (!data.seq) data.seq = {};
+            if (!data.seq.contact) data.seq.contact = 10;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             return data;
         }
     } catch {
@@ -32,7 +37,7 @@ function persist() {
 
 function nextId(kind) {
     state.seq[kind] = (state.seq[kind] || 1) + 1;
-    const prefix = { task: 't', event: 'e', advance: 'a', expense: 'x', receipt: 'r' }[kind];
+    const prefix = { task: 't', event: 'e', advance: 'a', expense: 'x', receipt: 'r', contact: 'c' }[kind];
     return `${prefix}${state.seq[kind]}`;
 }
 
@@ -49,6 +54,7 @@ export function useSkyDeskStore() {
     const advances = computed(() => state.advances);
     const expenses = computed(() => state.expenses);
     const receipts = computed(() => state.receipts);
+    const contacts = computed(() => state.contacts);
 
     const rootTasks = computed(() => state.tasks.filter((t) => !t.parent_id));
 
@@ -76,6 +82,7 @@ export function useSkyDeskStore() {
     const getTask = (id) => state.tasks.find((t) => t.id === id) ?? null;
     const getEvent = (id) => state.events.find((e) => e.id === id) ?? null;
     const getAdvance = (id) => state.advances.find((a) => a.id === id) ?? null;
+    const getContact = (id) => state.contacts.find((c) => c.id === id) ?? null;
 
     const childrenOf = (parentId) => state.tasks.filter((t) => t.parent_id === parentId);
 
@@ -355,6 +362,34 @@ export function useSkyDeskStore() {
         }
     };
 
+    const createContact = (payload = {}) => {
+        const id = nextId('contact');
+        const contact = {
+            id,
+            name: payload.name?.trim() || 'Новый контакт',
+            role: payload.role || '',
+            phone: payload.phone || '',
+            note: payload.note || '',
+        };
+        state.contacts.unshift(contact);
+        persist();
+        return contact;
+    };
+
+    const updateContact = (id, patch) => {
+        const contact = getContact(id);
+        if (!contact) return;
+        Object.assign(contact, patch);
+        persist();
+    };
+
+    const removeContact = (id) => {
+        const idx = state.contacts.findIndex((c) => c.id === id);
+        if (idx < 0) return;
+        state.contacts.splice(idx, 1);
+        persist();
+    };
+
     const resetStore = () => {
         const fresh = createSeedState();
         Object.keys(fresh).forEach((k) => {
@@ -372,6 +407,7 @@ export function useSkyDeskStore() {
         advances,
         expenses,
         receipts,
+        contacts,
         rootTasks,
         activeTaskCount,
         waitingMoneyCount,
@@ -385,6 +421,7 @@ export function useSkyDeskStore() {
         getTask,
         getEvent,
         getAdvance,
+        getContact,
         childrenOf,
         descendantsOf,
         tasksForEvent,
@@ -414,6 +451,9 @@ export function useSkyDeskStore() {
         zeroAsUnknown,
         recordOverspend,
         closeAdvanceWithSettlement,
+        createContact,
+        updateContact,
+        removeContact,
         resetStore,
         persist,
     };

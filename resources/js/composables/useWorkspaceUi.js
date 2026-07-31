@@ -6,6 +6,8 @@ const eventOpen = ref(false);
 const eventId = ref(null);
 const advanceOpen = ref(false);
 const advanceId = ref(null);
+const contactOpen = ref(false);
+const contactId = ref(null);
 const quickCreateOpen = ref(false);
 const quickCreateEventId = ref(null);
 
@@ -25,6 +27,11 @@ export function useWorkspaceUi() {
         advanceOpen.value = true;
     };
 
+    const openContact = (id) => {
+        contactId.value = id;
+        contactOpen.value = true;
+    };
+
     const openQuickCreate = (eventIdForLink = null) => {
         quickCreateEventId.value = eventIdForLink;
         quickCreateOpen.value = true;
@@ -37,11 +44,14 @@ export function useWorkspaceUi() {
         eventId,
         advanceOpen,
         advanceId,
+        contactOpen,
+        contactId,
         quickCreateOpen,
         quickCreateEventId,
         openTask,
         openEvent,
         openAdvance,
+        openContact,
         openQuickCreate,
     };
 }

@@ -25,6 +25,10 @@ Route::get('/finance', function () {
     return Inertia::render('Finance/Index');
 })->name('finance.index');
 
+Route::get('/contacts', function () {
+    return Inertia::render('Contacts/Index');
+})->name('contacts.index');
+
 Route::get('/settings', function () {
     return Inertia::render('Settings/Index');
 })->name('settings.index');

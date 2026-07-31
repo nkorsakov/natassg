@@ -359,6 +359,37 @@ export const seedReceipts = [
     { id: 'r3', expense_id: 'x2', name: 'check-2.jpg', placeholder: true },
 ];
 
+export const seedContacts = [
+    {
+        id: 'c1',
+        name: 'Елена',
+        role: 'Руководитель',
+        phone: '+7 900 000-00-01',
+        note: 'Основной заказчик поручений',
+    },
+    {
+        id: 'c2',
+        name: 'Дизайнер шоурума «Дом»',
+        role: 'Подрядчик',
+        phone: '+7 495 111-22-33',
+        note: 'Встречи по интерьеру',
+    },
+    {
+        id: 'c3',
+        name: 'Artefacto',
+        role: 'Доставка',
+        phone: '+7 495 222-33-44',
+        note: 'Мебель, подтверждение слотов',
+    },
+    {
+        id: 'c4',
+        name: 'Химчистка на Тверской',
+        role: 'Сервис',
+        phone: '+7 495 333-44-55',
+        note: 'Платья и костюмы',
+    },
+];
+
 export function createSeedState() {
     return {
         profile: structuredClone(seedProfile),
@@ -369,6 +400,7 @@ export function createSeedState() {
         advances: structuredClone(seedAdvances),
         expenses: structuredClone(seedExpenses),
         receipts: structuredClone(seedReceipts),
-        seq: { task: 20, event: 20, advance: 10, expense: 10, receipt: 10 },
+        contacts: structuredClone(seedContacts),
+        seq: { task: 20, event: 20, advance: 10, expense: 10, receipt: 10, contact: 10 },
     };
 }

@@ -6,9 +6,8 @@ import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
     taskId: { type: String, default: null },
-    parentId: { type: String, default: null },
 });
-const emit = defineEmits(['open-task', 'open-event', 'open-advance', 'created']);
+const emit = defineEmits(['open-task', 'open-event', 'open-advance']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
@@ -16,6 +15,12 @@ const store = useSkyDeskStore();
 const confirmClose = ref(false);
 const linkEventId = ref(null);
 const showNewEvent = ref(false);
+const showDeadline = ref(false);
+const showPriority = ref(false);
+const showType = ref(false);
+const showNote = ref(false);
+const showAttachEvent = ref(false);
+
 const newEvent = reactive({
     title: '',
     type_id: 'meeting',
@@ -36,20 +41,27 @@ const form = reactive({
     note: '',
 });
 
+const syncForm = () => {
+    if (!task.value) return;
+    form.title = task.value.title;
+    form.status_id = task.value.status_id;
+    form.priority_id = task.value.priority_id;
+    form.type_id = task.value.type_id;
+    form.deadline = task.value.deadline ? String(task.value.deadline).slice(0, 16) : '';
+    form.note = task.value.note || '';
+    showDeadline.value = !!task.value.deadline;
+    showPriority.value = task.value.priority_id !== 'normal';
+    showType.value = false;
+    showNote.value = !!task.value.note;
+    showNewEvent.value = false;
+    showAttachEvent.value = false;
+    linkEventId.value = null;
+};
+
 watch(
     () => [model.value, props.taskId],
     () => {
-        if (!model.value || !task.value) return;
-        form.title = task.value.title;
-        form.status_id = task.value.status_id;
-        form.priority_id = task.value.priority_id;
-        form.type_id = task.value.type_id;
-        form.deadline = task.value.deadline
-            ? task.value.deadline.slice(0, 16)
-            : '';
-        form.note = task.value.note || '';
-        linkEventId.value = null;
-        showNewEvent.value = false;
+        if (model.value && task.value) syncForm();
     },
     { immediate: true },
 );
@@ -66,8 +78,20 @@ const priorityItems = computed(() => store.dictionaries.value.priorities);
 const typeItems = computed(() => store.dictionaries.value.taskTypes);
 const eventTypeItems = computed(() => store.dictionaries.value.eventTypes);
 
+const addOptions = computed(() => {
+    const opts = [];
+    if (!showDeadline.value) opts.push({ id: 'deadline', label: 'Дедлайн', icon: 'mdi-clock-outline' });
+    if (!showPriority.value) opts.push({ id: 'priority', label: 'Приоритет', icon: 'mdi-flag-outline' });
+    if (!showType.value) opts.push({ id: 'type', label: 'Тип', icon: 'mdi-shape-outline' });
+    if (!showNote.value) opts.push({ id: 'note', label: 'Заметка', icon: 'mdi-note-text-outline' });
+    opts.push({ id: 'subtask', label: 'Подзадача', icon: 'mdi-file-tree-outline' });
+    opts.push({ id: 'event', label: 'Событие', icon: 'mdi-calendar-plus' });
+    opts.push({ id: 'advance', label: 'Аванс', icon: 'mdi-cash-plus' });
+    return opts;
+});
+
 const save = () => {
-    if (!props.taskId) return;
+    if (!props.taskId || !task.value) return;
     store.updateTask(props.taskId, {
         title: form.title.trim() || task.value.title,
         status_id: form.status_id,
@@ -78,18 +102,45 @@ const save = () => {
     });
 };
 
-const addChild = () => {
-    const child = store.createTask({
-        title: 'Новая подзадача',
-        parent_id: props.taskId,
-        status_id: 'new',
-    });
-    emit('open-task', child.id);
+watch(form, () => {
+    if (model.value && props.taskId) save();
+}, { deep: true });
+
+const onAdd = (id) => {
+    if (id === 'deadline') {
+        showDeadline.value = true;
+        if (!form.deadline) form.deadline = '2026-07-31T12:00';
+    } else if (id === 'priority') {
+        showPriority.value = true;
+        form.priority_id = 'high';
+    } else if (id === 'type') {
+        showType.value = true;
+    } else if (id === 'note') {
+        showNote.value = true;
+    } else if (id === 'subtask') {
+        const child = store.createTask({
+            title: 'Новая подзадача',
+            parent_id: props.taskId,
+            status_id: 'new',
+        });
+        emit('open-task', child.id);
+    } else if (id === 'event') {
+        showNewEvent.value = true;
+        showAttachEvent.value = true;
+        newEvent.title = '';
+        newEvent.start = form.deadline || '2026-07-31T12:00';
+    } else if (id === 'advance') {
+        const adv = store.createAdvance({
+            title: `Аванс: ${task.value?.title || ''}`,
+            task_id: props.taskId,
+            amount: 10000,
+            status_id: 'pending',
+        });
+        emit('open-advance', adv.id);
+    }
 };
 
-const promote = () => {
-    store.makeTaskRoot(props.taskId);
-};
+const promote = () => store.makeTaskRoot(props.taskId);
 
 const requestClose = () => {
     if (children.value.length || store.descendantsOf(props.taskId).length) {
@@ -120,6 +171,7 @@ const createAndAttachEvent = () => {
         task_ids: [props.taskId],
     });
     showNewEvent.value = false;
+    showAttachEvent.value = false;
     newEvent.title = '';
     emit('open-event', ev.id);
 };
@@ -128,45 +180,28 @@ const detachEvent = (eventId) => {
     store.unlinkTaskEvent(props.taskId, eventId);
 };
 
-const createAdvance = () => {
-    const adv = store.createAdvance({
-        title: `Аванс: ${task.value?.title || ''}`,
-        task_id: props.taskId,
-        amount: 10000,
-        status_id: 'pending',
-    });
-    emit('open-advance', adv.id);
+const clearDeadline = () => {
+    form.deadline = '';
+    showDeadline.value = false;
 };
-
-watch(
-    form,
-    () => {
-        if (model.value && props.taskId) save();
-    },
-    { deep: true },
-);
 </script>
 
 <template>
     <v-dialog
         v-model="model"
         :fullscreen="!mdAndUp"
-        :max-width="mdAndUp ? 920 : undefined"
+        :max-width="mdAndUp ? 640 : undefined"
         scrollable
         :transition="mdAndUp ? 'dialog-transition' : 'dialog-bottom-transition'"
     >
         <v-card v-if="task" class="d-flex flex-column" :style="mdAndUp ? 'max-height:90vh' : 'min-height:100%'">
             <v-card-title class="d-flex align-center justify-space-between px-6 pt-5 flex-wrap ga-2">
-                <div>
-                    <div class="text-caption text-medium-emphasis mb-1">Поручение</div>
-                    <span class="text-h6 font-weight-bold">Карточка</span>
-                </div>
+                <div class="text-h6 font-weight-bold">Поручение</div>
                 <div class="d-flex ga-2">
                     <v-btn
                         v-if="task.parent_id"
                         size="small"
                         variant="tonal"
-                        prepend-icon="mdi-arrow-up-bold"
                         @click="promote"
                     >
                         Сделать основной
@@ -178,7 +213,7 @@ watch(
                         color="success"
                         @click="requestClose"
                     >
-                        Закрыть
+                        Готово
                     </v-btn>
                     <v-btn icon variant="tonal" size="small" @click="model = false">
                         <v-icon>mdi-close</v-icon>
@@ -188,56 +223,99 @@ watch(
             <v-divider />
 
             <v-card-text class="px-6 py-5">
-                <v-text-field v-model="form.title" label="Название" class="mb-2" />
-                <v-row dense>
-                    <v-col cols="12" sm="4">
-                        <v-select
-                            v-model="form.status_id"
-                            :items="statusItems"
-                            item-title="label"
-                            item-value="id"
-                            label="Статус"
-                        />
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                        <v-select
-                            v-model="form.priority_id"
-                            :items="priorityItems"
-                            item-title="label"
-                            item-value="id"
-                            label="Приоритет"
-                        />
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                        <v-select
-                            v-model="form.type_id"
-                            :items="typeItems"
-                            item-title="label"
-                            item-value="id"
-                            label="Тип"
-                        />
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                        <v-text-field
-                            v-model="form.deadline"
-                            type="datetime-local"
-                            label="Дедлайн (можно в календарь)"
-                        />
-                    </v-col>
-                </v-row>
-                <v-textarea v-model="form.note" label="Заметка" rows="2" auto-grow class="mb-4" />
+                <v-text-field
+                    v-model="form.title"
+                    label="Что сделать"
+                    hide-details
+                    class="mb-4"
+                    autofocus
+                />
 
-                <!-- Subtasks -->
-                <div class="d-flex align-center justify-space-between mb-2">
-                    <h3 class="text-subtitle-2 font-weight-bold mb-0">Подзадачи</h3>
-                    <v-btn size="small" variant="tonal" prepend-icon="mdi-plus" @click="addChild">
-                        Добавить
+                <div class="d-flex align-center flex-wrap ga-2 mb-4">
+                    <v-select
+                        v-model="form.status_id"
+                        :items="statusItems"
+                        item-title="label"
+                        item-value="id"
+                        density="compact"
+                        hide-details
+                        style="max-width:200px"
+                        label="Статус"
+                    />
+
+                    <v-menu location="bottom">
+                        <template #activator="{ props: menuProps }">
+                            <v-btn
+                                v-bind="menuProps"
+                                size="small"
+                                variant="tonal"
+                                prepend-icon="mdi-plus"
+                                :disabled="!addOptions.length"
+                            >
+                                Добавить
+                            </v-btn>
+                        </template>
+                        <v-list density="compact" min-width="200">
+                            <v-list-item
+                                v-for="opt in addOptions"
+                                :key="opt.id"
+                                :prepend-icon="opt.icon"
+                                :title="opt.label"
+                                @click="onAdd(opt.id)"
+                            />
+                        </v-list>
+                    </v-menu>
+                </div>
+
+                <!-- Optional fields -->
+                <div v-if="showDeadline" class="d-flex align-center ga-2 mb-3">
+                    <v-text-field
+                        v-model="form.deadline"
+                        type="datetime-local"
+                        label="Дедлайн"
+                        density="compact"
+                        hide-details
+                        class="flex-grow-1"
+                    />
+                    <v-btn icon variant="text" size="small" @click="clearDeadline">
+                        <v-icon>mdi-close</v-icon>
                     </v-btn>
                 </div>
-                <div v-if="!children.length" class="text-caption text-medium-emphasis mb-4">
-                    Нет подзадач
-                </div>
-                <div v-else class="mb-4">
+
+                <v-select
+                    v-if="showPriority"
+                    v-model="form.priority_id"
+                    :items="priorityItems"
+                    item-title="label"
+                    item-value="id"
+                    label="Приоритет"
+                    density="compact"
+                    class="mb-3"
+                />
+
+                <v-select
+                    v-if="showType"
+                    v-model="form.type_id"
+                    :items="typeItems"
+                    item-title="label"
+                    item-value="id"
+                    label="Тип"
+                    density="compact"
+                    class="mb-3"
+                />
+
+                <v-textarea
+                    v-if="showNote"
+                    v-model="form.note"
+                    label="Заметка"
+                    rows="2"
+                    auto-grow
+                    class="mb-3"
+                />
+
+                <!-- Subtasks: only if any -->
+                <template v-if="children.length">
+                    <div class="text-caption font-weight-bold text-medium-emphasis mb-2">Подзадачи</div>
                     <div
                         v-for="child in children"
                         :key="child.id"
@@ -245,29 +323,22 @@ watch(
                         style="cursor:pointer"
                         @click="emit('open-task', child.id)"
                     >
-                        <v-icon size="16" :color="store.getStatus(child.status_id)?.color">
-                            mdi-subdirectory-arrow-right
-                        </v-icon>
+                        <v-icon size="16">mdi-subdirectory-arrow-right</v-icon>
                         <div class="flex-grow-1 text-body-2 font-weight-medium">{{ child.title }}</div>
-                        <v-chip size="x-small" variant="tonal" :color="store.getStatus(child.status_id)?.color">
+                        <v-chip size="x-small" variant="tonal">
                             {{ store.getStatus(child.status_id)?.label }}
                         </v-chip>
                     </div>
-                </div>
+                </template>
 
-                <!-- Events -->
-                <div class="d-flex align-center justify-space-between mb-2">
-                    <h3 class="text-subtitle-2 font-weight-bold mb-0">События</h3>
-                    <v-btn size="small" variant="tonal" prepend-icon="mdi-plus" @click="showNewEvent = !showNewEvent">
-                        Новое
-                    </v-btn>
-                </div>
-                <div v-if="linkedEvents.length" class="mb-2">
+                <!-- Events: only if any or adding -->
+                <template v-if="linkedEvents.length || showAttachEvent">
+                    <div class="text-caption font-weight-bold text-medium-emphasis mb-2 mt-3">События</div>
                     <div
                         v-for="ev in linkedEvents"
                         :key="ev.id"
-                        class="d-flex align-center ga-2 px-3 py-2 mb-1"
-                        style="border-radius:11px;background:rgba(var(--v-theme-primary),.06);cursor:pointer"
+                        class="d-flex align-center ga-2 px-3 py-2 mb-1 skydesk-accent-panel"
+                        style="cursor:pointer"
                         @click="emit('open-event', ev.id)"
                     >
                         <v-icon size="16">mdi-calendar</v-icon>
@@ -276,71 +347,69 @@ watch(
                             <v-icon size="16">mdi-link-off</v-icon>
                         </v-btn>
                     </div>
-                </div>
-                <div v-if="availableEvents.length" class="d-flex ga-2 mb-4 align-center">
-                    <v-select
-                        v-model="linkEventId"
-                        :items="availableEvents"
-                        item-title="title"
-                        item-value="id"
-                        label="Привязать существующее"
-                        density="compact"
-                        hide-details
-                        class="flex-grow-1"
-                    />
-                    <v-btn color="primary" variant="tonal" :disabled="!linkEventId" @click="attachEvent">
-                        Привязать
-                    </v-btn>
-                </div>
-                <v-card v-if="showNewEvent" variant="outlined" class="pa-4 mb-4">
-                    <v-text-field v-model="newEvent.title" label="Название события" density="compact" />
-                    <v-row dense>
-                        <v-col cols="6">
-                            <v-select
-                                v-model="newEvent.type_id"
-                                :items="eventTypeItems"
-                                item-title="label"
-                                item-value="id"
-                                label="Тип"
-                                density="compact"
-                            />
-                        </v-col>
-                        <v-col cols="6">
-                            <v-switch v-model="newEvent.allDay" label="Весь день" density="compact" hide-details />
-                        </v-col>
-                        <v-col cols="6">
-                            <v-text-field v-model="newEvent.start" type="datetime-local" label="Начало" density="compact" />
-                        </v-col>
-                        <v-col cols="6">
-                            <v-text-field v-model="newEvent.end" type="datetime-local" label="Конец" density="compact" />
-                        </v-col>
-                    </v-row>
-                    <v-btn color="primary" size="small" @click="createAndAttachEvent">Создать и привязать</v-btn>
-                </v-card>
 
-                <!-- Advances -->
-                <div class="d-flex align-center justify-space-between mb-2">
-                    <h3 class="text-subtitle-2 font-weight-bold mb-0">Авансы</h3>
-                    <v-btn size="small" variant="tonal" prepend-icon="mdi-cash-plus" @click="createAdvance">
-                        Запросить деньги
-                    </v-btn>
-                </div>
-                <div v-if="!linkedAdvances.length" class="text-caption text-medium-emphasis">Нет заявок</div>
-                <div
-                    v-for="adv in linkedAdvances"
-                    :key="adv.id"
-                    class="d-flex align-center ga-2 px-3 py-2 mb-1 skydesk-accent-panel"
-                    style="cursor:pointer"
-                    @click="emit('open-advance', adv.id)"
-                >
-                    <div class="flex-grow-1">
-                        <div class="text-body-2 font-weight-bold">{{ adv.title }}</div>
-                        <div class="text-caption text-medium-emphasis">
-                            {{ store.formatMoney(adv.amount) }} · {{ store.getAdvanceStatus(adv.status_id)?.label }}
-                        </div>
+                    <div v-if="showAttachEvent && availableEvents.length" class="d-flex ga-2 mb-2 align-center">
+                        <v-select
+                            v-model="linkEventId"
+                            :items="availableEvents"
+                            item-title="title"
+                            item-value="id"
+                            label="Привязать существующее"
+                            density="compact"
+                            hide-details
+                            class="flex-grow-1"
+                        />
+                        <v-btn color="primary" variant="tonal" size="small" :disabled="!linkEventId" @click="attachEvent">
+                            OK
+                        </v-btn>
                     </div>
-                    <v-icon size="18">mdi-chevron-right</v-icon>
-                </div>
+
+                    <v-card v-if="showNewEvent" variant="outlined" class="pa-4 mb-2">
+                        <v-text-field v-model="newEvent.title" label="Название события" density="compact" hide-details class="mb-2" />
+                        <v-row dense>
+                            <v-col cols="6">
+                                <v-select
+                                    v-model="newEvent.type_id"
+                                    :items="eventTypeItems"
+                                    item-title="label"
+                                    item-value="id"
+                                    label="Тип"
+                                    density="compact"
+                                    hide-details
+                                />
+                            </v-col>
+                            <v-col cols="6">
+                                <v-text-field v-model="newEvent.start" type="datetime-local" label="Когда" density="compact" hide-details />
+                            </v-col>
+                        </v-row>
+                        <div class="d-flex ga-2 mt-3">
+                            <v-btn size="small" variant="tonal" @click="showNewEvent = false; showAttachEvent = false">
+                                Отмена
+                            </v-btn>
+                            <v-btn color="primary" size="small" @click="createAndAttachEvent">Создать</v-btn>
+                        </div>
+                    </v-card>
+                </template>
+
+                <!-- Advances: only if any -->
+                <template v-if="linkedAdvances.length">
+                    <div class="text-caption font-weight-bold text-medium-emphasis mb-2 mt-3">Авансы</div>
+                    <div
+                        v-for="adv in linkedAdvances"
+                        :key="adv.id"
+                        class="d-flex align-center ga-2 px-3 py-2 mb-1 skydesk-accent-panel"
+                        style="cursor:pointer"
+                        @click="emit('open-advance', adv.id)"
+                    >
+                        <div class="flex-grow-1">
+                            <div class="text-body-2 font-weight-bold">{{ adv.title }}</div>
+                            <div class="text-caption text-medium-emphasis">
+                                {{ store.formatMoney(adv.amount) }} · {{ store.getAdvanceStatus(adv.status_id)?.label }}
+                            </div>
+                        </div>
+                        <v-icon size="18">mdi-chevron-right</v-icon>
+                    </div>
+                </template>
             </v-card-text>
         </v-card>
     </v-dialog>
