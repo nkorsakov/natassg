@@ -152,10 +152,11 @@ onMounted(() => {
                     <v-form @submit.prevent="submit">
                         <v-text-field
                             v-model="form.email"
-                            label="Email"
-                            type="email"
+                            label="Логин"
+                            type="text"
                             autocomplete="username"
-                            prepend-inner-icon="mdi-email-outline"
+                            placeholder="nkorsakov или nataliya"
+                            prepend-inner-icon="mdi-account-outline"
                             class="mb-1"
                             hide-details="auto"
                             :disabled="telegramLoading"

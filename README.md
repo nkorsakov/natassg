@@ -57,12 +57,12 @@ docker compose exec natassg-app php artisan storage:link
 npm install && npm run dev
 ```
 
-Демо-вход после сидера:
+Демо-вход после сидера (пароль у обоих: `G00glemap`):
 
-- email: `natalia@skydesk.local`
-- пароль: `password`
+- логин: `nkorsakov` (или `nkorsakov@skydesk.local`)
+- логин: `nataliya` (или `nataliya@skydesk.local`)
 
-Сиды заполняют только словари и пользователя (с пустым кошельком). Поручения, события, авансы и контакты стартуют пустыми.
+Сиды заполняют только словари и пользователей (с пустым кошельком). Поручения, события, авансы и контакты стартуют пустыми.
 
 ## Рабочие экраны
 

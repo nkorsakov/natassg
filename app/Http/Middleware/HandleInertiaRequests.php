@@ -24,7 +24,19 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => SkyDeskPresenter::user($user),
             ],
-            'skydesk' => fn () => $user ? SkyDeskPresenter::workspace($user) : null,
+            'skydesk' => function () use ($user) {
+                if (! $user) {
+                    return null;
+                }
+
+                try {
+                    return SkyDeskPresenter::workspace($user);
+                } catch (\Throwable $e) {
+                    report($e);
+
+                    return null;
+                }
+            },
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),
                 'created_task_id' => fn () => $request->session()->get('created_task_id'),
