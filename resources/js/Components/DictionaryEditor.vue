@@ -123,7 +123,7 @@ const remove = (id) => {
                 <v-btn icon variant="text" size="small" @click="startEdit(item)">
                     <v-icon size="18">mdi-pencil-outline</v-icon>
                 </v-btn>
-                <v-btn icon variant="text" size="small" :disabled="items.length <= 1" @click="remove(item.id)">
+                <v-btn icon variant="text" size="small" :disabled="items.length <= 1 || item.is_system" @click="remove(item.id)">
                     <v-icon size="18">mdi-delete-outline</v-icon>
                 </v-btn>
             </div>

@@ -102,16 +102,16 @@ const calendarOptions = computed(() => ({
     },
 }));
 
-const createEvent = () => {
+const createEvent = async () => {
     if (!draft.value.title.trim()) return;
-    const ev = store.createEvent({
+    const ev = await store.createEvent({
         title: draft.value.title.trim(),
         type_id: draft.value.type_id,
         start: draft.value.start,
         allDay: draft.value.allDay,
     });
     creating.value = false;
-    openEvent(ev.id);
+    if (ev?.id) openEvent(ev.id);
 };
 </script>
 

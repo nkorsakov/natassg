@@ -5,7 +5,7 @@ import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
-    contactId: { type: String, default: null },
+    contactId: { type: [String, Number], default: null },
 });
 
 const { mdAndUp } = useDisplay();

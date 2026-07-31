@@ -2,15 +2,19 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { prepareUploadFile } from '@/utils/compressImage';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
-    advanceId: { type: String, default: null },
+    advanceId: { type: [String, Number], default: null },
 });
 const emit = defineEmits(['open-task']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
+const receiptInput = ref(null);
+const receiptExpenseId = ref(null);
+const uploadingReceipt = ref(false);
 
 const advance = computed(() => (props.advanceId ? store.getAdvance(props.advanceId) : null));
 const expenseList = computed(() =>
@@ -76,7 +80,22 @@ const addExpense = () => {
 };
 
 const addReceipt = (expenseId) => {
-    store.addReceipt(expenseId, `чек-${Date.now()}.jpg`);
+    receiptExpenseId.value = expenseId;
+    receiptInput.value?.click();
+};
+
+const onReceiptSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !receiptExpenseId.value) return;
+    uploadingReceipt.value = true;
+    try {
+        const prepared = await prepareUploadFile(file);
+        store.addReceipt(receiptExpenseId.value, prepared.file);
+    } finally {
+        uploadingReceipt.value = false;
+        receiptExpenseId.value = null;
+    }
 };
 </script>
 
@@ -195,10 +214,20 @@ const addReceipt = (expenseId) => {
                             size="small"
                             variant="tonal"
                             prepend-icon="mdi-receipt"
+                            :href="r.url"
+                            tag="a"
+                            target="_blank"
+                            rel="noopener"
                         >
                             {{ r.name }}
                         </v-chip>
-                        <v-btn size="x-small" variant="tonal" prepend-icon="mdi-camera" @click="addReceipt(x.id)">
+                        <v-btn
+                            size="x-small"
+                            variant="tonal"
+                            prepend-icon="mdi-camera"
+                            :loading="uploadingReceipt && receiptExpenseId === x.id"
+                            @click="addReceipt(x.id)"
+                        >
                             Чек
                         </v-btn>
                     </div>
@@ -228,5 +257,13 @@ const addReceipt = (expenseId) => {
                 </v-btn>
             </v-card-text>
         </v-card>
+
+        <input
+            ref="receiptInput"
+            type="file"
+            class="d-none"
+            accept="image/*,.pdf"
+            @change="onReceiptSelected"
+        />
     </v-dialog>
 </template>

@@ -42,13 +42,13 @@ const summary = computed(() => {
     ];
 });
 
-const createAdvance = () => {
-    const adv = store.createAdvance({
+const createAdvance = async () => {
+    const adv = await store.createAdvance({
         title: 'Новая заявка на аванс',
         amount: 10000,
         status_id: 'pending',
     });
-    openAdvance(adv.id);
+    if (adv?.id) openAdvance(adv.id);
 };
 </script>
 

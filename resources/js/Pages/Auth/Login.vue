@@ -1,6 +1,6 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { useDisplay, useTheme } from 'vuetify';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
@@ -13,35 +13,65 @@ const { mdAndUp } = useDisplay();
 const theme = useTheme();
 const { isDark } = useAppearance();
 
-const form = reactive({
+const form = useForm({
     email: '',
     password: '',
     remember: true,
 });
 
 const showPassword = ref(false);
-const submitting = ref(false);
-const error = ref('');
+const telegramLoading = ref(false);
+const telegramError = ref('');
 
 const primaryColor = computed(() => theme.current.value.colors.primary);
 const canSubmit = computed(
-    () => form.email.trim().length > 0 && form.password.length > 0 && !submitting.value,
+    () => form.email.trim().length > 0 && form.password.length > 0 && !form.processing,
+);
+const error = computed(
+    () =>
+        telegramError.value
+        || form.errors.email
+        || form.errors.password
+        || form.errors.init_data
+        || '',
 );
 
 const submit = () => {
-    error.value = '';
+    telegramError.value = '';
     if (!canSubmit.value) {
-        error.value = 'Введите email и пароль';
         return;
     }
 
-    submitting.value = true;
-    // UI-прототип: backend auth ещё нет
-    window.setTimeout(() => {
-        submitting.value = false;
-        router.visit('/dashboard');
-    }, 450);
+    form.post('/login', {
+        onFinish: () => form.reset('password'),
+    });
 };
+
+const tryTelegramLogin = () => {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (!initData) {
+        return;
+    }
+
+    telegramLoading.value = true;
+    telegramError.value = '';
+
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand?.();
+
+    router.post('/auth/telegram', { init_data: initData }, {
+        onError: (errors) => {
+            telegramError.value = errors.init_data || 'Не удалось войти через Telegram.';
+        },
+        onFinish: () => {
+            telegramLoading.value = false;
+        },
+    });
+};
+
+onMounted(() => {
+    tryTelegramLogin();
+});
 </script>
 
 <template>
@@ -109,6 +139,16 @@ const submit = () => {
                         {{ error }}
                     </v-alert>
 
+                    <v-alert
+                        v-if="telegramLoading"
+                        type="info"
+                        variant="tonal"
+                        class="mb-4"
+                        density="comfortable"
+                    >
+                        Вход через Telegram…
+                    </v-alert>
+
                     <v-form @submit.prevent="submit">
                         <v-text-field
                             v-model="form.email"
@@ -118,6 +158,7 @@ const submit = () => {
                             prepend-inner-icon="mdi-email-outline"
                             class="mb-1"
                             hide-details="auto"
+                            :disabled="telegramLoading"
                         />
 
                         <v-text-field
@@ -129,6 +170,7 @@ const submit = () => {
                             :append-inner-icon="showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
                             class="mb-2"
                             hide-details="auto"
+                            :disabled="telegramLoading"
                             @click:append-inner="showPassword = !showPassword"
                         />
 
@@ -140,10 +182,8 @@ const submit = () => {
                                 color="primary"
                                 hide-details
                                 class="ms-n1"
+                                :disabled="telegramLoading"
                             />
-                            <button type="button" class="login-link" tabindex="0">
-                                Забыли пароль?
-                            </button>
                         </div>
 
                         <v-btn
@@ -152,17 +192,12 @@ const submit = () => {
                             block
                             size="large"
                             height="52"
-                            :loading="submitting"
-                            :disabled="!canSubmit"
+                            :loading="form.processing || telegramLoading"
+                            :disabled="!canSubmit || telegramLoading"
                         >
                             Войти
                         </v-btn>
                     </v-form>
-
-                    <p class="login-panel__foot text-medium-emphasis">
-                        Нет аккаунта?
-                        <button type="button" class="login-link">Запросить доступ</button>
-                    </p>
                 </div>
             </section>
         </div>
@@ -350,12 +385,6 @@ const submit = () => {
     margin: 8px 0 0;
     color: rgba(var(--v-theme-on-surface), 0.62);
     font-size: 0.95rem;
-}
-
-.login-panel__foot {
-    margin: 28px 0 0;
-    text-align: center;
-    font-size: 0.9rem;
 }
 
 .login-link {

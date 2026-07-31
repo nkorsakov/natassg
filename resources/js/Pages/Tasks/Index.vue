@@ -24,7 +24,7 @@ const formatDeadline = (dl) => {
 
 const filters = computed(() => {
     const roots = store.rootTasks.value;
-    const today = '2026-07-31';
+    const today = new Date().toISOString().slice(0, 10);
     return [
         { value: 'all', label: `Все · ${roots.length}` },
         {
@@ -48,8 +48,9 @@ const filters = computed(() => {
 
 const visibleTasks = computed(() => {
     let list = store.rootTasks.value;
+    const today = new Date().toISOString().slice(0, 10);
     if (filter.value === 'today') {
-        list = list.filter((t) => t.deadline?.startsWith('2026-07-31'));
+        list = list.filter((t) => t.deadline?.startsWith(today));
     } else if (filter.value === 'in_progress') {
         list = list.filter((t) => t.status_id === 'in_progress');
     } else if (filter.value === 'waiting_money') {

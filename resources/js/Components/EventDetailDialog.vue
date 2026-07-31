@@ -5,7 +5,7 @@ import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
-    eventId: { type: String, default: null },
+    eventId: { type: [String, Number], default: null },
 });
 const emit = defineEmits(['open-task', 'create-task']);
 

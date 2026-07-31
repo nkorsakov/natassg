@@ -70,13 +70,25 @@ const todayLabel = computed(() =>
 );
 
 const primaryColor = computed(() => theme.current.value.colors.primary);
-const profile = computed(() => store.profile.value);
+const authUser = computed(() => page.props.auth?.user);
+const profile = computed(() => {
+    const user = authUser.value;
+    if (user) {
+        return {
+            name: user.name,
+            initials: user.initials,
+            role: user.role || store.profile.value.role,
+        };
+    }
+    return store.profile.value;
+});
 
 const isActive = (href) => currentPath.value === href;
 const go = (href) => router.visit(href);
 
 const openCreate = () => openQuickCreate();
 const openSettings = () => router.visit('/settings');
+const logout = () => router.post('/logout');
 
 const onTaskCreated = (id) => openTask(id);
 
@@ -170,6 +182,16 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
                             @click="openSettings"
                         >
                             <v-icon size="20">mdi-cog-outline</v-icon>
+                        </v-btn>
+                        <v-btn
+                            icon
+                            variant="text"
+                            size="small"
+                            aria-label="Выйти"
+                            title="Выйти"
+                            @click="logout"
+                        >
+                            <v-icon size="20">mdi-logout</v-icon>
                         </v-btn>
                     </div>
                 </div>

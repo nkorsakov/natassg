@@ -31,9 +31,9 @@ const initials = (name) => {
     return (parts[0][0] + parts[1][0]).toUpperCase();
 };
 
-const create = () => {
-    const contact = store.createContact({ name: 'Новый контакт' });
-    openContact(contact.id);
+const create = async () => {
+    const contact = await store.createContact({ name: 'Новый контакт' });
+    if (contact?.id) openContact(contact.id);
 };
 </script>
 

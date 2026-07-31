@@ -5,32 +5,37 @@ import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
-    eventId: { type: String, default: null },
-    parentId: { type: String, default: null },
+    eventId: { type: [String, Number], default: null },
+    parentId: { type: [String, Number], default: null },
 });
 const emit = defineEmits(['created']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
 const title = ref('');
+const saving = ref(false);
 
 watch(model, (open) => {
     if (open) title.value = '';
 });
 
-const canSave = computed(() => title.value.trim().length > 0);
+const canSave = computed(() => title.value.trim().length > 0 && !saving.value);
 
-const save = () => {
+const save = async () => {
     if (!canSave.value) return;
-    const task = store.createTask({
-        title: title.value.trim(),
-        parent_id: props.parentId,
-        event_ids: props.eventId ? [props.eventId] : [],
-        status_id: 'new',
-    });
-    if (props.eventId) store.linkTaskEvent(task.id, props.eventId);
-    model.value = false;
-    emit('created', task.id);
+    saving.value = true;
+    try {
+        const task = await store.createTask({
+            title: title.value.trim(),
+            parent_id: props.parentId,
+            event_id: props.eventId || null,
+            status_id: 'new',
+        });
+        model.value = false;
+        emit('created', task?.id);
+    } finally {
+        saving.value = false;
+    }
 };
 </script>
 
@@ -65,7 +70,7 @@ const save = () => {
             <v-card-actions class="px-6 py-4">
                 <v-spacer />
                 <v-btn variant="tonal" @click="model = false">Отмена</v-btn>
-                <v-btn color="primary" :disabled="!canSave" @click="save">Создать</v-btn>
+                <v-btn color="primary" :disabled="!canSave" :loading="saving" @click="save">Создать</v-btn>
             </v-card-actions>
         </v-card>
     </v-dialog>

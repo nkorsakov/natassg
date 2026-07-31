@@ -2,10 +2,11 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { prepareUploadFile } from '@/utils/compressImage';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
-    taskId: { type: String, default: null },
+    taskId: { type: [String, Number], default: null },
 });
 const emit = defineEmits(['open-task', 'open-event', 'open-advance']);
 
@@ -20,6 +21,8 @@ const showPriority = ref(false);
 const showType = ref(false);
 const showNote = ref(false);
 const showAttachEvent = ref(false);
+const uploading = ref(false);
+const fileInput = ref(null);
 
 const newEvent = reactive({
     title: '',
@@ -87,8 +90,11 @@ const addOptions = computed(() => {
     opts.push({ id: 'subtask', label: 'Подзадача', icon: 'mdi-file-tree-outline' });
     opts.push({ id: 'event', label: 'Событие', icon: 'mdi-calendar-plus' });
     opts.push({ id: 'advance', label: 'Аванс', icon: 'mdi-cash-plus' });
+    opts.push({ id: 'file', label: 'Файл / фото', icon: 'mdi-paperclip' });
     return opts;
 });
+
+const attachments = computed(() => task.value?.attachments || []);
 
 const save = () => {
     if (!props.taskId || !task.value) return;
@@ -106,10 +112,14 @@ watch(form, () => {
     if (model.value && props.taskId) save();
 }, { deep: true });
 
-const onAdd = (id) => {
+const onAdd = async (id) => {
     if (id === 'deadline') {
         showDeadline.value = true;
-        if (!form.deadline) form.deadline = '2026-07-31T12:00';
+        if (!form.deadline) {
+            const d = new Date();
+            d.setMinutes(0, 0, 0);
+            form.deadline = d.toISOString().slice(0, 16);
+        }
     } else if (id === 'priority') {
         showPriority.value = true;
         form.priority_id = 'high';
@@ -118,26 +128,50 @@ const onAdd = (id) => {
     } else if (id === 'note') {
         showNote.value = true;
     } else if (id === 'subtask') {
-        const child = store.createTask({
+        const child = await store.createTask({
             title: 'Новая подзадача',
             parent_id: props.taskId,
             status_id: 'new',
         });
-        emit('open-task', child.id);
+        if (child?.id) emit('open-task', child.id);
     } else if (id === 'event') {
         showNewEvent.value = true;
         showAttachEvent.value = true;
         newEvent.title = '';
-        newEvent.start = form.deadline || '2026-07-31T12:00';
+        newEvent.start = form.deadline || new Date().toISOString().slice(0, 16);
     } else if (id === 'advance') {
-        const adv = store.createAdvance({
+        const adv = await store.createAdvance({
             title: `Аванс: ${task.value?.title || ''}`,
             task_id: props.taskId,
             amount: 10000,
             status_id: 'pending',
         });
-        emit('open-advance', adv.id);
+        if (adv?.id) emit('open-advance', adv.id);
+    } else if (id === 'file') {
+        fileInput.value?.click();
     }
+};
+
+const onFilesSelected = async (event) => {
+    const files = [...(event.target.files || [])];
+    event.target.value = '';
+    if (!files.length || !props.taskId) return;
+    uploading.value = true;
+    try {
+        for (const raw of files) {
+            const prepared = await prepareUploadFile(raw);
+            store.uploadTaskAttachment(props.taskId, prepared.file, {
+                width: prepared.width,
+                height: prepared.height,
+            });
+        }
+    } finally {
+        uploading.value = false;
+    }
+};
+
+const removeAttachment = (attachmentId) => {
+    store.removeTaskAttachment(props.taskId, attachmentId);
 };
 
 const promote = () => store.makeTaskRoot(props.taskId);
@@ -163,9 +197,9 @@ const attachEvent = () => {
     linkEventId.value = null;
 };
 
-const createAndAttachEvent = () => {
+const createAndAttachEvent = async () => {
     if (!newEvent.title.trim()) return;
-    const ev = store.createEvent({
+    const ev = await store.createEvent({
         ...newEvent,
         title: newEvent.title.trim(),
         task_ids: [props.taskId],
@@ -173,7 +207,7 @@ const createAndAttachEvent = () => {
     showNewEvent.value = false;
     showAttachEvent.value = false;
     newEvent.title = '';
-    emit('open-event', ev.id);
+    if (ev?.id) emit('open-event', ev.id);
 };
 
 const detachEvent = (eventId) => {
@@ -410,6 +444,36 @@ const clearDeadline = () => {
                         <v-icon size="18">mdi-chevron-right</v-icon>
                     </div>
                 </template>
+
+                <template v-if="attachments.length || uploading">
+                    <div class="text-caption font-weight-bold text-medium-emphasis mb-2 mt-3">Вложения</div>
+                    <div
+                        v-for="att in attachments"
+                        :key="att.id"
+                        class="d-flex align-center ga-2 px-3 py-2 mb-1 skydesk-accent-panel"
+                    >
+                        <v-icon size="16">{{ att.kind === 'image' ? 'mdi-image-outline' : 'mdi-file-outline' }}</v-icon>
+                        <a
+                            :href="att.url"
+                            target="_blank"
+                            rel="noopener"
+                            class="flex-grow-1 text-body-2 text-decoration-none"
+                        >{{ att.original_name }}</a>
+                        <v-btn icon size="x-small" variant="text" @click="removeAttachment(att.id)">
+                            <v-icon size="16">mdi-delete-outline</v-icon>
+                        </v-btn>
+                    </div>
+                    <div v-if="uploading" class="text-caption text-medium-emphasis">Загрузка…</div>
+                </template>
+
+                <input
+                    ref="fileInput"
+                    type="file"
+                    class="d-none"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    @change="onFilesSelected"
+                />
             </v-card-text>
         </v-card>
     </v-dialog>
