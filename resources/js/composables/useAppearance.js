@@ -10,7 +10,7 @@ export const ACCENTS = [
     { id: 'rose', label: 'Розовый', color: '#E11D48' },
 ];
 
-const STORAGE_KEY = 'natassg-appearance';
+const STORAGE_KEY = 'skydesk-appearance';
 
 const mode = ref('light');
 const accent = ref('violet');
@@ -36,10 +36,10 @@ function save() {
 }
 
 function apply(theme) {
-    theme.global.name.value = mode.value === 'dark' ? 'natassgDark' : 'natassg';
+    theme.global.name.value = mode.value === 'dark' ? 'skydeskDark' : 'skydesk';
 
     const accentColor = ACCENTS.find((a) => a.id === accent.value)?.color ?? ACCENTS[0].color;
-    for (const name of ['natassg', 'natassgDark']) {
+    for (const name of ['skydesk', 'skydeskDark']) {
         const colors = theme.themes.value[name]?.colors;
         if (!colors) continue;
         colors.primary = accentColor;
@@ -47,7 +47,7 @@ function apply(theme) {
     }
 
     document.documentElement.dataset.theme = mode.value;
-    document.documentElement.style.setProperty('--natassg-accent', accentColor);
+    document.documentElement.style.setProperty('--skydesk-accent', accentColor);
 }
 
 export function useAppearance() {

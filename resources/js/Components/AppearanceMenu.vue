@@ -45,8 +45,8 @@ const { mode, accent, accents, setMode, setAccent } = useAppearance();
                     v-for="item in accents"
                     :key="item.id"
                     type="button"
-                    class="natassg-swatch"
-                    :class="{ 'natassg-swatch--active': accent === item.id }"
+                    class="skydesk-swatch"
+                    :class="{ 'skydesk-swatch--active': accent === item.id }"
                     :style="{ background: item.color }"
                     :title="item.label"
                     :aria-label="item.label"
@@ -60,7 +60,7 @@ const { mode, accent, accents, setMode, setAccent } = useAppearance();
 </template>
 
 <style scoped>
-.natassg-swatch {
+.skydesk-swatch {
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -73,7 +73,7 @@ const { mode, accent, accents, setMode, setAccent } = useAppearance();
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
-.natassg-swatch--active {
+.skydesk-swatch--active {
     box-shadow:
         0 0 0 2px rgb(var(--v-theme-surface)),
         0 0 0 4px currentColor;

@@ -9,10 +9,13 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="{{ config('app.name', 'Natassg') }}">
-    <meta name="application-name" content="{{ config('app.name', 'Natassg') }}">
-    <meta name="description" content="Личный помощник: поручения, календарь и финансы">
-    <title inertia>{{ config('app.name', 'Natassg') }}</title>
+    <meta name="apple-mobile-web-app-title" content="{{ config('app.name', 'SkyDesk') }}">
+    <meta name="application-name" content="{{ config('app.name', 'SkyDesk') }}">
+    <meta name="description" content="SkyDesk — поручения, календарь и финансы для личного помощника">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+    <title inertia>{{ config('app.name', 'SkyDesk') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @inertiaHead
 </head>

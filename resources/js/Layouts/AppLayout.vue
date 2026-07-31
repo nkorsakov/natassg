@@ -7,7 +7,7 @@ import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
 
 const props = defineProps({
-    title: { type: String, default: 'Natassg' },
+    title: { type: String, default: 'SkyDesk' },
     subtitle: { type: String, default: '' },
     showFab: { type: Boolean, default: true },
 });
@@ -65,29 +65,30 @@ defineExpose({ openCreate });
             v-if="mdAndUp"
             v-model="drawer"
             permanent
-            width="254"
-            color="surface"
-            border
+            width="268"
+            :border="0"
+            class="skydesk-drawer"
+            :class="{ 'skydesk-drawer--dark': isDark }"
         >
-            <div class="d-flex align-center ga-3 px-4 pt-6 pb-8">
-                <div
-                    class="d-flex align-center justify-center text-white font-weight-bold"
-                    style="width:30px;height:30px;border-radius:10px"
-                    :style="{ background: primaryColor }"
-                >
-                    ✦
+            <div class="skydesk-drawer__glow" aria-hidden="true" />
+            <div class="skydesk-drawer__grid" aria-hidden="true" />
+
+            <div class="skydesk-drawer__brand px-5 pt-7 pb-6">
+                <div class="d-flex align-center ga-3">
+                    <div
+                        class="skydesk-mark"
+                        :style="{ background: primaryColor }"
+                    >
+                        ✦
+                    </div>
+                    <div>
+                        <div class="skydesk-wordmark">SkyDesk</div>
+                        <div class="skydesk-wordmark__sub">Рабочее пространство</div>
+                    </div>
                 </div>
-                <span class="text-body-1 font-weight-bold">Личный помощник</span>
             </div>
 
-            <div
-                class="text-uppercase text-caption px-5 pb-2 text-medium-emphasis"
-                style="letter-spacing:.08em;font-weight:700"
-            >
-                Рабочее пространство
-            </div>
-
-            <v-list nav density="comfortable" class="px-2">
+            <v-list nav density="comfortable" class="skydesk-drawer__nav px-3">
                 <v-list-item
                     v-for="item in items"
                     :key="item.href"
@@ -96,28 +97,50 @@ defineExpose({ openCreate });
                     :title="item.title"
                     rounded="lg"
                     class="mb-1"
-                    color="primary"
                     @click="go(item.href)"
                 >
                     <template v-if="item.badge" #append>
-                        <v-chip size="x-small" color="primary" variant="tonal">{{ item.badge }}</v-chip>
+                        <v-chip
+                            size="x-small"
+                            variant="flat"
+                            class="skydesk-drawer__badge"
+                        >
+                            {{ item.badge }}
+                        </v-chip>
                     </template>
                 </v-list-item>
             </v-list>
 
             <template #append>
-                <div class="pa-3">
-                    <v-btn color="primary" block height="45" prepend-icon="mdi-plus" @click="openCreate">
+                <div class="skydesk-drawer__foot pa-3">
+                    <v-btn
+                        color="primary"
+                        block
+                        height="45"
+                        prepend-icon="mdi-plus"
+                        class="skydesk-drawer__cta"
+                        @click="openCreate"
+                    >
                         Новое поручение
                     </v-btn>
-                    <div class="d-flex align-center ga-3 mt-5 pt-4 natassg-divider-top">
-                        <v-avatar size="31" color="primary" variant="tonal">
+                    <div class="d-flex align-center ga-3 mt-5 pt-4 skydesk-drawer__user">
+                        <v-avatar size="31" color="primary">
                             <span class="text-caption font-weight-bold">АМ</span>
                         </v-avatar>
-                        <div>
+                        <div class="flex-grow-1 min-w-0">
                             <div class="text-body-2 font-weight-bold">Анна М.</div>
-                            <div class="text-caption text-medium-emphasis">Личный помощник</div>
+                            <div class="skydesk-drawer__role">Личный помощник</div>
                         </div>
+                        <v-btn
+                            icon
+                            variant="text"
+                            size="small"
+                            class="skydesk-drawer__settings"
+                            aria-label="Настройки"
+                            title="Настройки"
+                        >
+                            <v-icon size="20">mdi-cog-outline</v-icon>
+                        </v-btn>
                     </div>
                 </div>
             </template>
@@ -126,43 +149,39 @@ defineExpose({ openCreate });
         <!-- Desktop top bar -->
         <v-app-bar v-if="mdAndUp" flat border color="background" density="comfortable">
             <div class="px-6 text-body-2 text-medium-emphasis w-100 d-flex align-center justify-space-between">
-                <div>
-                    Рабочее пространство /
+                <div class="d-flex align-center ga-2">
+                    <span class="skydesk-wordmark skydesk-wordmark--bar">SkyDesk</span>
+                    <span class="text-medium-emphasis">/</span>
                     <span class="font-weight-bold text-high-emphasis">{{ crumb }}</span>
                 </div>
                 <div class="d-flex align-center ga-2">
                     <span class="text-body-2 font-weight-medium text-capitalize">{{ todayLabel }}</span>
                     <AppearanceMenu />
-                    <v-btn icon variant="outlined" size="small" color="secondary">
-                        <v-icon>mdi-magnify</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="outlined" size="small" color="secondary">
-                        <v-badge dot color="error" location="top end" offset-x="6" offset-y="6">
-                            <v-icon>mdi-bell-outline</v-icon>
-                        </v-badge>
-                    </v-btn>
                 </div>
             </div>
         </v-app-bar>
 
         <!-- Mobile top bar -->
         <v-app-bar v-else flat color="background" density="comfortable" class="px-1">
-            <v-toolbar-title class="font-weight-bold text-body-1">Личный помощник</v-toolbar-title>
+            <div class="d-flex align-center ga-2 ps-2">
+                <div
+                    class="skydesk-mark skydesk-mark--sm"
+                    :style="{ background: primaryColor }"
+                >
+                    ✦
+                </div>
+                <span class="skydesk-wordmark skydesk-wordmark--mobile">SkyDesk</span>
+            </div>
             <template #append>
                 <AppearanceMenu />
-                <v-btn icon variant="text">
-                    <v-badge dot color="error">
-                        <v-icon>mdi-bell-outline</v-icon>
-                    </v-badge>
-                </v-btn>
             </template>
         </v-app-bar>
 
-        <v-main class="natassg-main bg-background">
+        <v-main class="skydesk-main bg-background">
             <v-container :fluid="mdAndUp" :class="mdAndUp ? 'pa-8' : 'pa-4'" style="max-width:1560px">
                 <div class="d-flex align-end justify-space-between mb-6 flex-wrap ga-3">
                     <div>
-                        <h1 class="text-h4 font-weight-bold mb-1" style="letter-spacing:-1px">
+                        <h1 class="skydesk-page-title mb-1">
                             <slot name="heading">{{ title }}</slot>
                         </h1>
                         <p v-if="subtitle || $slots.subtitle" class="text-body-2 text-medium-emphasis mb-0">
@@ -214,7 +233,7 @@ defineExpose({ openCreate });
             icon
             size="x-large"
             elevation="8"
-            class="natassg-fab"
+            class="skydesk-fab"
             style="position:fixed;right:20px;bottom:88px;z-index:21;border-radius:18px !important"
             @click="openCreate"
         >
@@ -226,7 +245,156 @@ defineExpose({ openCreate });
 </template>
 
 <style scoped>
-.natassg-divider-top {
-    border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+.skydesk-drawer {
+    background:
+        radial-gradient(120% 80% at 10% -10%, rgba(var(--v-theme-primary), 0.38), transparent 52%),
+        radial-gradient(90% 60% at 110% 30%, rgba(255, 173, 77, 0.14), transparent 46%),
+        linear-gradient(165deg, #1a1730 0%, #2a2450 48%, #191827 100%) !important;
+    color: #f4f2ff;
+    overflow: hidden;
+}
+
+.skydesk-drawer--dark {
+    background:
+        radial-gradient(120% 80% at 10% -10%, rgba(var(--v-theme-primary), 0.28), transparent 52%),
+        radial-gradient(90% 60% at 110% 30%, rgba(255, 173, 77, 0.1), transparent 46%),
+        linear-gradient(165deg, #0e0e12 0%, #17161f 48%, #101014 100%) !important;
+}
+
+.skydesk-drawer__glow {
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    right: -70px;
+    bottom: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(var(--v-theme-primary), 0.42), transparent 68%);
+    filter: blur(10px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.skydesk-drawer__grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.14;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.7), transparent 85%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.skydesk-drawer__brand,
+.skydesk-drawer__nav,
+.skydesk-drawer__foot {
+    position: relative;
+    z-index: 1;
+}
+
+.skydesk-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+.skydesk-mark--sm {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    font-size: 13px;
+}
+
+.skydesk-wordmark {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 700;
+    font-size: 1.45rem;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: #f4f2ff;
+}
+
+.skydesk-wordmark--bar {
+    font-size: 1.15rem;
+    color: rgb(var(--v-theme-on-surface));
+}
+
+.skydesk-wordmark--mobile {
+    font-size: 1.25rem;
+    color: rgb(var(--v-theme-on-surface));
+}
+
+.skydesk-wordmark__sub {
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(244, 242, 255, 0.55);
+    font-family: Manrope, system-ui, sans-serif;
+}
+
+.skydesk-drawer__nav :deep(.v-list-item) {
+    color: rgba(244, 242, 255, 0.78);
+}
+
+.skydesk-drawer__nav :deep(.v-list-item--active) {
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: #fff !important;
+}
+
+.skydesk-drawer__nav :deep(.v-list-item:hover) {
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.skydesk-drawer__nav :deep(.v-list-item__prepend .v-icon) {
+    opacity: 0.9;
+}
+
+.skydesk-drawer__badge {
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: #fff !important;
+    font-weight: 700;
+}
+
+.skydesk-drawer__cta {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.skydesk-drawer__user {
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f4f2ff;
+}
+
+.skydesk-drawer__role {
+    font-size: 12px;
+    color: rgba(244, 242, 255, 0.55);
+}
+
+.skydesk-drawer__settings {
+    color: rgba(244, 242, 255, 0.72) !important;
+    flex-shrink: 0;
+}
+
+.skydesk-drawer__settings:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.skydesk-page-title {
+    font-family: Fraunces, Georgia, serif;
+    font-size: clamp(1.65rem, 2.4vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
 }
 </style>

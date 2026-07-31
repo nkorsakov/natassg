@@ -84,7 +84,7 @@ const statusColor = (status) => {
                     <v-chip
                         v-if="mdAndUp"
                         size="small"
-                        class="natassg-pill"
+                        class="skydesk-pill"
                         :color="statusColor(item.status)"
                         variant="tonal"
                     >

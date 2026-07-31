@@ -20,7 +20,7 @@ const pillColor = (kind) => {
 </script>
 
 <template>
-    <div class="natassg-task d-flex align-center ga-3 px-3 py-3" style="border-radius:11px;min-height:56px">
+    <div class="skydesk-task d-flex align-center ga-3 px-3 py-3" style="border-radius:11px;min-height:56px">
         <v-btn
             icon
             size="x-small"
@@ -41,7 +41,7 @@ const pillColor = (kind) => {
                         v-for="pill in pills"
                         :key="pill.label"
                         size="x-small"
-                        class="natassg-pill"
+                        class="skydesk-pill"
                         :color="pillColor(pill.kind)"
                         variant="tonal"
                     >
@@ -57,7 +57,7 @@ const pillColor = (kind) => {
                 v-for="pill in pills"
                 :key="pill.label"
                 size="x-small"
-                class="natassg-pill d-none d-md-inline-flex"
+                class="skydesk-pill d-none d-md-inline-flex"
                 :color="pillColor(pill.kind)"
                 variant="tonal"
             >

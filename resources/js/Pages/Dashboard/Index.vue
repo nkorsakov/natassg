@@ -35,11 +35,13 @@ const { mdAndUp } = useDisplay();
                     ? 'flex:1 1 0;min-width:180px;min-height:104px'
                     : 'flex:0 0 145px;min-height:111px'"
             >
-                <div class="natassg-stat-icon mb-3" :style="{ background: stat.bg }">
-                    <v-icon :icon="stat.icon" size="18" :color="stat.color" />
+                <div class="d-flex align-center ga-3 mb-3">
+                    <div class="skydesk-stat-icon" :style="{ background: stat.bg }">
+                        <v-icon :icon="stat.icon" size="18" :color="stat.color" />
+                    </div>
+                    <div class="text-h5 font-weight-bold" style="letter-spacing:-.5px">{{ stat.value }}</div>
                 </div>
-                <div class="text-h5 font-weight-bold" style="letter-spacing:-.5px">{{ stat.value }}</div>
-                <div class="text-caption text-medium-emphasis mt-1">{{ stat.label }}</div>
+                <div class="text-caption text-medium-emphasis">{{ stat.label }}</div>
             </v-card>
         </div>
 
@@ -74,7 +76,7 @@ const { mdAndUp } = useDisplay();
                         <div
                             v-for="item in agenda"
                             :key="item.title"
-                            class="d-flex ga-3 py-3 natassg-row-divider"
+                            class="d-flex ga-3 py-3 skydesk-row-divider"
                         >
                             <div class="text-caption text-medium-emphasis" style="width:43px">{{ item.time }}</div>
                             <div>
@@ -98,7 +100,7 @@ const { mdAndUp } = useDisplay();
                             Открыть →
                         </v-btn>
                     </div>
-                    <div class="mx-5 mb-5 pa-4 natassg-accent-panel">
+                    <div class="mx-5 mb-5 pa-4 skydesk-accent-panel">
                         <div class="d-flex justify-space-between text-caption font-weight-bold text-primary">
                             <span>{{ financePreview.label }}</span>
                             <span>{{ financePreview.count }}</span>

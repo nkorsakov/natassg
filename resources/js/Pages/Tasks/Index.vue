@@ -65,7 +65,7 @@ const selectedFilter = ref('all');
                     <v-card
                         v-for="box in insights"
                         :key="box.title"
-                        class="mt-4 pa-4 natassg-accent-panel"
+                        class="mt-4 pa-4 skydesk-accent-panel"
                     >
                         <div class="text-body-2 font-weight-bold mb-1">{{ box.title }}</div>
                         <div class="text-caption text-medium-emphasis" style="line-height:1.45">{{ box.text }}</div>

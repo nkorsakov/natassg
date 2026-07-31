@@ -4,7 +4,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import vuetify from './plugins/vuetify';
 import '../css/app.css';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Natassg';
+const appName = import.meta.env.VITE_APP_NAME || 'SkyDesk';
 
 createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
@@ -20,6 +20,6 @@ createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: 'var(--natassg-accent, #6957EE)',
+        color: 'var(--skydesk-accent, #6957EE)',
     },
 });

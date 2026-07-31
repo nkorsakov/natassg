@@ -7,6 +7,7 @@ body {
     color: rgb(var(--v-theme-on-background, 25, 24, 39));
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
+    font-family: Manrope, system-ui, sans-serif;
 }
 
 #app {
@@ -14,17 +15,17 @@ body {
     min-height: 100dvh;
 }
 
-.natassg-pill {
+.skydesk-pill {
     font-size: 10px !important;
     font-weight: 700 !important;
     letter-spacing: 0.01em;
 }
 
-.natassg-task:hover {
+.skydesk-task:hover {
     background: rgba(var(--v-theme-primary), 0.04);
 }
 
-.natassg-stat-icon {
+.skydesk-stat-icon {
     width: 31px;
     height: 31px;
     border-radius: 10px;
@@ -32,11 +33,11 @@ body {
     place-items: center;
 }
 
-.natassg-row-divider {
+.skydesk-row-divider {
     border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
-.natassg-accent-panel {
+.skydesk-accent-panel {
     background: rgba(var(--v-theme-primary), 0.08);
     border: 1px solid rgba(var(--v-theme-primary), 0.18);
     border-radius: 13px;
@@ -44,7 +45,7 @@ body {
 
 /* PWA / iOS standalone: home indicator & notch */
 @media (max-width: 959px) {
-    .natassg-main {
+    .skydesk-main {
         padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
@@ -53,7 +54,7 @@ body {
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    .natassg-fab {
+    .skydesk-fab {
         bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
         right: calc(20px + env(safe-area-inset-right, 0px)) !important;
     }
