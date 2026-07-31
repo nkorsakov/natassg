@@ -4,19 +4,31 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        $password = 'G00glemap';
+
         User::updateOrCreate(
-            ['email' => 'natalia@skydesk.local'],
+            ['email' => 'nkorsakov@skydesk.local'],
+            [
+                'name' => 'Николай К.',
+                'initials' => 'НК',
+                'role_title' => 'Владелец',
+                'password' => $password,
+                'email_verified_at' => now(),
+            ],
+        );
+
+        User::updateOrCreate(
+            ['email' => 'nataliya@skydesk.local'],
             [
                 'name' => 'Наталия Я.',
                 'initials' => 'НЯ',
                 'role_title' => 'Личный помощник',
-                'password' => Hash::make('password'),
+                'password' => $password,
                 'email_verified_at' => now(),
             ],
         );
