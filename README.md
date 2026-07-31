@@ -4,6 +4,8 @@
 
 Не CRM и не «управление бизнесом» — фиксация поручений, помощь в исполнении, при необходимости финансирование и история.
 
+Продукт рассчитан на использование как **PWA**: установка на телефон, быстрый вход с домашнего экрана, мобильный UI как основной сценарий.
+
 ## Зачем
 
 Большинство задач приходит по телефону, в мессенджере или лично. Главный принцип — **максимальная скорость фиксации**: новое поручение за несколько секунд.
@@ -35,44 +37,21 @@
 2. **Календарь** — встречи, поездки, мероприятия (вспомогательный модуль)
 3. **Финансы** — согласование / выдача / отчёты по авансам
 
-## Стек (локально)
+## Клиент (PWA)
 
-- Laravel 11 + PHP 8.2-FPM (`natassg-app`)
-- nginx (`natassg-web`) — порт **80**
-- MySQL 8 (`natassg-database`) — порт **3306**
+- Мобильный интерфейс — приоритет: нижняя навигация, быстрое создание поручения (FAB / шторка)
+- Светлая и тёмная темы, настраиваемый акцентный цвет
+- Учёт safe-area (вырез / home indicator) для standalone-режима на iOS/Android
+- Офлайн и push — в планах вместе с полноценной PWA-обвязкой (manifest, service worker)
 
-Порты как у SSG: перед стартом останови SSG (`cd ~/projects/ssg && docker compose stop`).
+## Стек
 
-### Старт
-
-```bash
-cd ~/projects/natassg
-docker compose up -d --build
-```
-
-App: http://localhost
-
-```bash
-docker compose exec natassg-app php artisan
-```
-
-### БД
-
-```
-DB_HOST=natassg-database
-DB_PORT=3306
-DB_DATABASE=natassg
-DB_USERNAME=natassg
-DB_PASSWORD=secret
-```
-
-### Остановка / возврат к SSG
-
-```bash
-cd ~/projects/natassg && docker compose stop
-cd ~/projects/ssg && docker compose start
-```
+- Laravel 11 + Inertia.js
+- Vue 3 + Vuetify 4
+- FullCalendar
+- MySQL
 
 ## Статус
 
-Каркас приложения и Docker подняты. Домен поручений / авансов / календаря — в разработке.
+Каркас UI: экраны `/dashboard`, `/tasks`, `/calendar`, `/finance`.
+Домен поручений / авансов и PWA-установка — в разработке.
