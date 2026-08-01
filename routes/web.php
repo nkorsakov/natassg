@@ -43,6 +43,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
     Route::post('/wallet/topups', [FinanceController::class, 'topUp'])->name('wallet.topups');
+    Route::put('/wallet/topups/{transaction}', [FinanceController::class, 'updateTopUp'])->name('wallet.topups.update');
     Route::post('/advances', [FinanceController::class, 'storeAdvance'])->name('advances.store');
     Route::put('/advances/{advance}', [FinanceController::class, 'updateAdvance'])->name('advances.update');
     Route::post('/advances/{advance}/release', [FinanceController::class, 'release'])->name('advances.release');
@@ -50,7 +51,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/advances/{advance}/writeoff', [FinanceController::class, 'writeOff'])->name('advances.writeoff');
     Route::post('/advances/{advance}/expenses', [FinanceController::class, 'storeExpense'])->name('advances.expenses.store');
     Route::post('/advances/{advance}/expenses/{expense}/receipts', [FinanceController::class, 'storeAdvanceReceipt'])->name('advances.receipts.store');
-    Route::post('/expenses', [FinanceController::class, 'storeExpense'])->name('expenses.store');
+    Route::post('/expenses', [FinanceController::class, 'storeFreeExpense'])->name('expenses.store');
     Route::put('/expenses/{expense}', [FinanceController::class, 'updateExpense'])->name('expenses.update');
     Route::delete('/expenses/{expense}', [FinanceController::class, 'destroyExpense'])->name('expenses.destroy');
     Route::post('/expenses/{expense}/receipts', [FinanceController::class, 'storeReceipt'])->name('expenses.receipts.store');
@@ -69,5 +70,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/dictionaries/{key}', [SettingsController::class, 'storeDict'])->name('settings.dict.store');
     Route::put('/settings/dictionaries/{key}/{slug}', [SettingsController::class, 'updateDict'])->name('settings.dict.update');
     Route::delete('/settings/dictionaries/{key}/{slug}', [SettingsController::class, 'destroyDict'])->name('settings.dict.destroy');
-    Route::put('/settings/suppliers/{contact}', [SettingsController::class, 'setSupplier'])->name('settings.suppliers.update');
+    Route::post('/settings/suppliers', [SettingsController::class, 'storeSupplier'])->name('settings.suppliers.store');
+    Route::put('/settings/suppliers/{supplier}', [SettingsController::class, 'updateSupplier'])->name('settings.suppliers.update');
+    Route::delete('/settings/suppliers/{supplier}', [SettingsController::class, 'destroySupplier'])->name('settings.suppliers.destroy');
 });

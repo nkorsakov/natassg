@@ -20,6 +20,7 @@ class CalendarEvent extends Model
         'all_day',
         'place',
         'note',
+        'is_demo',
     ];
 
     protected function casts(): array
@@ -28,6 +29,7 @@ class CalendarEvent extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'all_day' => 'boolean',
+            'is_demo' => 'boolean',
         ];
     }
 

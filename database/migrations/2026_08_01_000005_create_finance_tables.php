@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('advances', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('task_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('status_id')->constrained('advance_statuses');
+            $table->foreignId('disbursement_method_id')->nullable()->constrained('disbursement_methods')->nullOnDelete();
             $table->string('title');
             $table->bigInteger('amount_minor')->default(0);
             $table->text('note')->nullable();
@@ -23,9 +23,21 @@ return new class extends Migration
             $table->index(['user_id', 'status_id']);
         });
 
-        Schema::create('expenses', function (Blueprint $table) {
+        Schema::create('advance_task', function (Blueprint $table) {
             $table->id();
             $table->foreignId('advance_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('task_id')->constrained()->cascadeOnDelete();
+            $table->timestamps();
+            $table->unique(['advance_id', 'task_id']);
+        });
+
+        Schema::create('expenses', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('advance_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('article_id')->nullable()->constrained('expense_articles')->restrictOnDelete();
+            $table->foreignId('supplier_contact_id')->nullable()->constrained('contacts')->restrictOnDelete();
+            $table->foreignId('task_id')->nullable()->constrained('tasks')->nullOnDelete();
             $table->bigInteger('amount_minor')->default(0);
             $table->string('description')->nullable();
             $table->timestamps();
@@ -47,10 +59,12 @@ return new class extends Migration
             $table->string('type', 32);
             $table->bigInteger('amount_minor');
             $table->foreignId('advance_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('expense_id')->nullable()->constrained('expenses')->nullOnDelete();
             $table->json('meta')->nullable();
             $table->timestamps();
 
             $table->index(['wallet_id', 'created_at']);
+            $table->index(['advance_id', 'type']);
         });
     }
 
@@ -59,6 +73,7 @@ return new class extends Migration
         Schema::dropIfExists('wallet_transactions');
         Schema::dropIfExists('receipts');
         Schema::dropIfExists('expenses');
+        Schema::dropIfExists('advance_task');
         Schema::dropIfExists('advances');
     }
 };

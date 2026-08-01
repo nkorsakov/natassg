@@ -18,6 +18,7 @@ class Advance extends Model
         'note',
         'issued_at',
         'closed_at',
+        'is_demo',
     ];
 
     protected function casts(): array
@@ -25,6 +26,7 @@ class Advance extends Model
         return [
             'issued_at' => 'datetime',
             'closed_at' => 'datetime',
+            'is_demo' => 'boolean',
         ];
     }
 

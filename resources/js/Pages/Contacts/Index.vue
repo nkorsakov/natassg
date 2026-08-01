@@ -51,23 +51,13 @@ const create = async () => {
                 density="compact"
                 hide-details
                 clearable
-                style="width:220px"
+                class="flex-grow-1"
+                style="min-width:140px;max-width:280px"
             />
             <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="create">
                 Новый контакт
             </v-btn>
         </template>
-
-        <v-text-field
-            v-if="!mdAndUp"
-            v-model="query"
-            prepend-inner-icon="mdi-magnify"
-            label="Поиск"
-            density="compact"
-            hide-details
-            clearable
-            class="mb-3"
-        />
 
         <v-card>
             <div

@@ -24,6 +24,7 @@ function emptyWorkspace() {
         expenses: [],
         receipts: [],
         contacts: [],
+        suppliers: [],
         wallet: { balance: 0, free: 0, in_advances: 0, currency: 'RUB', transactions: [] },
     };
 }
@@ -55,6 +56,7 @@ export function useSkyDeskStore() {
     const expenses = computed(() => skydesk.value.expenses || []);
     const receipts = computed(() => skydesk.value.receipts || []);
     const contacts = computed(() => skydesk.value.contacts || []);
+    const suppliers = computed(() => skydesk.value.suppliers || []);
 
     const rootTasks = computed(() => tasks.value.filter((t) => !t.parent_id));
 
@@ -97,7 +99,7 @@ export function useSkyDeskStore() {
     const getEvent = (id) => events.value.find((e) => String(e.id) === String(id)) ?? null;
     const getAdvance = (id) => advances.value.find((a) => String(a.id) === String(id)) ?? null;
     const getContact = (id) => contacts.value.find((c) => String(c.id) === String(id)) ?? null;
-    const suppliers = computed(() => contacts.value.filter((c) => c.is_supplier));
+    const getSupplier = (id) => suppliers.value.find((s) => String(s.id) === String(id)) ?? null;
 
     const childrenOf = (parentId) =>
         tasks.value.filter((t) => String(t.parent_id) === String(parentId));
@@ -139,6 +141,8 @@ export function useSkyDeskStore() {
     };
 
     const receiptsForExpense = (expenseId) => {
+        const fromList = expenses.value.find((e) => String(e.id) === String(expenseId));
+        if (fromList?.receipts) return fromList.receipts;
         const fromAdv = advances.value
             .flatMap((a) => a.expenses || [])
             .find((e) => String(e.id) === String(expenseId));
@@ -287,7 +291,7 @@ export function useSkyDeskStore() {
             amount: Number(payload.amount) || 0,
             description: payload.description || '',
             article_id: payload.article_id,
-            supplier_contact_id: payload.supplier_contact_id,
+            supplier_id: payload.supplier_id,
             task_id: payload.task_id ?? null,
         };
         if (advanceId) {
@@ -327,6 +331,17 @@ export function useSkyDeskStore() {
         router.post('/wallet/topups', {
             amount: Number(payload.amount) || 0,
             note: payload.note || '',
+            title: payload.title || '',
+            disbursement_method_id: payload.disbursement_method_id || null,
+        }, visitOpts);
+    };
+
+    const updateTopUp = (transactionId, payload = {}) => {
+        router.put(`/wallet/topups/${transactionId}`, {
+            amount: Number(payload.amount) || 0,
+            note: payload.note || '',
+            title: payload.title || '',
+            disbursement_method_id: payload.disbursement_method_id || null,
         }, visitOpts);
     };
 
@@ -342,8 +357,28 @@ export function useSkyDeskStore() {
         router.post(`/advances/${advanceId}/writeoff`, {}, visitOpts);
     };
 
-    const setSupplier = (contactId, isSupplier) => {
-        router.put(`/settings/suppliers/${contactId}`, { is_supplier: !!isSupplier }, visitOpts);
+    const createSupplier = (payload = {}) =>
+        new Promise((resolve) => {
+            router.post('/settings/suppliers', {
+                name: String(payload.name ?? '').trim(),
+                contact_id: payload.contact_id || null,
+                note: payload.note || null,
+            }, {
+                ...visitOpts,
+                onSuccess: (pageResult) => {
+                    const id = pageResult.props.flash?.created_supplier_id;
+                    resolve({ id });
+                },
+            });
+        });
+
+    const updateSupplier = (id, patch) => {
+        debouncedPut(`supplier-${id}`, `/settings/suppliers/${id}`, patch);
+    };
+
+    const removeSupplier = (id) => {
+        if (!window.confirm('Удалить поставщика?')) return;
+        router.delete(`/settings/suppliers/${id}`, visitOpts);
     };
 
     const createContact = (payload = {}) =>
@@ -429,6 +464,7 @@ export function useSkyDeskStore() {
         getEvent,
         getAdvance,
         getContact,
+        getSupplier,
         suppliers,
         childrenOf,
         descendantsOf,
@@ -459,10 +495,13 @@ export function useSkyDeskStore() {
         addReceipt,
         removeReceipt,
         topUpWallet,
+        updateTopUp,
         releaseRemainderToFree,
         returnRemainderToBoss,
         writeOffUnknown,
-        setSupplier,
+        createSupplier,
+        updateSupplier,
+        removeSupplier,
         createContact,
         updateContact,
         removeContact,

@@ -4,27 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Contact extends Model
+class Supplier extends Model
 {
-    use SoftDeletes;
-
     protected $fillable = [
         'user_id',
         'name',
-        'role',
-        'phone',
+        'contact_id',
         'note',
-        'is_supplier',
         'is_demo',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_supplier' => 'boolean',
             'is_demo' => 'boolean',
         ];
     }
@@ -34,8 +28,13 @@ class Contact extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function supplier(): HasOne
+    public function contact(): BelongsTo
     {
-        return $this->hasOne(Supplier::class);
+        return $this->belongsTo(Contact::class);
+    }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class);
     }
 }

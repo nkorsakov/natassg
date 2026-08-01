@@ -13,7 +13,15 @@ class Receipt extends Model
         'original_name',
         'mime',
         'size',
+        'is_demo',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_demo' => 'boolean',
+        ];
+    }
 
     public function expense(): BelongsTo
     {

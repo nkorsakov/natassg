@@ -8,6 +8,17 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('contacts')) {
+            if (! Schema::hasColumn('contacts', 'is_supplier')) {
+                Schema::table('contacts', function (Blueprint $table) {
+                    $table->boolean('is_supplier')->default(false)->after('note');
+                    $table->index(['user_id', 'is_supplier']);
+                });
+            }
+
+            return;
+        }
+
         Schema::create('contacts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
@@ -15,10 +26,12 @@ return new class extends Migration
             $table->string('role')->nullable();
             $table->string('phone')->nullable();
             $table->text('note')->nullable();
+            $table->boolean('is_supplier')->default(false);
             $table->timestamps();
             $table->softDeletes();
 
             $table->index(['user_id', 'name']);
+            $table->index(['user_id', 'is_supplier']);
         });
     }
 

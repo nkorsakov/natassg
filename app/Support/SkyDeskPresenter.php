@@ -6,6 +6,7 @@ use App\Models\Advance;
 use App\Models\CalendarEvent;
 use App\Models\Contact;
 use App\Models\Expense;
+use App\Models\Supplier;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\User;
@@ -85,9 +86,15 @@ class SkyDeskPresenter
             ->get();
 
         $contacts = $user->contacts()->orderBy('name')->get();
+        $suppliers = $user->suppliers()->with('contact')->orderBy('name')->get();
         $wallet = $user->wallet;
         if ($wallet) {
-            $wallet->load(['transactions' => fn ($q) => $q->orderByDesc('id')->limit(100)]);
+            $wallet->load([
+                'transactions' => fn ($q) => $q
+                    ->with(['advance', 'expense.article', 'expense.supplier'])
+                    ->orderByDesc('id')
+                    ->limit(100),
+            ]);
         }
 
         $presentedAdvances = $advances->map(fn (Advance $a) => self::advance($a))->values();
@@ -103,15 +110,11 @@ class SkyDeskPresenter
             'events' => $events->map(fn (CalendarEvent $e) => self::event($e))->values(),
             'advances' => $presentedAdvances,
             'contacts' => $contacts->map(fn (Contact $c) => self::contact($c))->values(),
+            'suppliers' => $suppliers->map(fn (Supplier $s) => self::supplier($s))->values(),
             'wallet' => self::wallet($wallet, $presentedAdvances),
             'expenses' => $expenses->map(fn (Expense $e) => self::expense($e))->values(),
             'receipts' => $expenses->flatMap(
-                fn (Expense $e) => $e->receipts->map(fn ($r) => [
-                    'id' => $r->id,
-                    'expense_id' => $e->id,
-                    'name' => $r->original_name,
-                    'url' => Storage::disk('public')->url($r->path),
-                ])
+                fn (Expense $e) => $e->receipts->map(fn ($r) => self::receipt($r, $e->id))
             )->values(),
         ];
     }
@@ -210,16 +213,41 @@ class SkyDeskPresenter
             'advance_id' => $expense->advance_id,
             'task_id' => $expense->task_id,
             'article_id' => $expense->article?->slug,
-            'supplier_contact_id' => $expense->supplier_contact_id,
+            'supplier_id' => $expense->supplier_id,
             'amount' => DictionaryResolver::minorToRubles((int) $expense->amount_minor),
             'description' => $expense->description ?? '',
             'receipt_ids' => $expense->receipts->pluck('id')->values(),
-            'receipts' => $expense->receipts->map(fn ($r) => [
-                'id' => $r->id,
-                'expense_id' => $expense->id,
-                'name' => $r->original_name,
-                'url' => Storage::disk('public')->url($r->path),
-            ])->values(),
+            'receipts' => $expense->receipts->map(fn ($r) => self::receipt($r, $expense->id))->values(),
+        ];
+    }
+
+    public static function receipt($receipt, ?int $expenseId = null): array
+    {
+        $mime = (string) ($receipt->mime ?? '');
+        $isImage = str_starts_with($mime, 'image/')
+            || preg_match('/\.(jpe?g|png|gif|webp|heic|bmp)$/i', (string) $receipt->original_name);
+
+        return [
+            'id' => $receipt->id,
+            'expense_id' => $expenseId ?? $receipt->expense_id,
+            'name' => $receipt->original_name,
+            'original_name' => $receipt->original_name,
+            'mime' => $mime ?: null,
+            'kind' => $isImage ? 'image' : 'file',
+            'url' => Storage::disk('public')->url($receipt->path),
+        ];
+    }
+
+    public static function supplier(Supplier $supplier): array
+    {
+        $supplier->loadMissing('contact');
+
+        return [
+            'id' => $supplier->id,
+            'name' => $supplier->name,
+            'contact_id' => $supplier->contact_id,
+            'note' => $supplier->note ?? '',
+            'contact_name' => $supplier->contact?->name,
         ];
     }
 
@@ -260,6 +288,7 @@ class SkyDeskPresenter
             $transactions = $wallet->transactions->map(fn (WalletTransaction $tx) => [
                 'id' => $tx->id,
                 'type' => $tx->type,
+                'title' => self::transactionTitle($tx),
                 'amount' => DictionaryResolver::minorToRubles((int) $tx->amount_minor),
                 'amount_minor' => $tx->amount_minor,
                 'advance_id' => $tx->advance_id,
@@ -279,5 +308,34 @@ class SkyDeskPresenter
             'currency' => $wallet?->currency ?? 'RUB',
             'transactions' => $transactions,
         ];
+    }
+
+    public static function transactionTitle(WalletTransaction $tx): string
+    {
+        $meta = is_array($tx->meta) ? $tx->meta : [];
+        $advanceTitle = $tx->advance?->title;
+        $expenseTitle = $tx->expense?->description
+            ?: $tx->expense?->article?->label;
+
+        return match ($tx->type) {
+            WalletTransaction::TYPE_TOPUP => trim((string) ($meta['title'] ?? ''))
+                ?: trim((string) ($meta['note'] ?? ''))
+                ?: 'Пополнение',
+            WalletTransaction::TYPE_ISSUE => trim((string) ($advanceTitle ?? '')) ?: 'Выдача аванса',
+            WalletTransaction::TYPE_EXPENSE => trim((string) ($expenseTitle ?? '')) ?: 'Трата',
+            WalletTransaction::TYPE_RETURN => $advanceTitle
+                ? 'Возврат: '.$advanceTitle
+                : 'Возврат',
+            WalletTransaction::TYPE_WRITEOFF => $advanceTitle
+                ? 'Списание: '.$advanceTitle
+                : 'Списание',
+            WalletTransaction::TYPE_RELEASE => $advanceTitle
+                ? 'В свободно: '.$advanceTitle
+                : 'В свободный остаток',
+            WalletTransaction::TYPE_AMOUNT_ADJUST => $advanceTitle
+                ? 'Корректировка: '.$advanceTitle
+                : 'Корректировка суммы',
+            default => (string) $tx->type,
+        };
     }
 }

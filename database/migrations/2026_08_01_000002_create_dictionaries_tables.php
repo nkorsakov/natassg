@@ -58,10 +58,32 @@ return new class extends Migration
             $table->boolean('is_system')->default(false);
             $table->timestamps();
         });
+
+        Schema::create('expense_articles', function (Blueprint $table) {
+            $table->id();
+            $table->string('slug')->unique();
+            $table->string('label');
+            $table->string('color', 32);
+            $table->unsignedInteger('sort')->default(0);
+            $table->boolean('is_system')->default(false);
+            $table->timestamps();
+        });
+
+        Schema::create('disbursement_methods', function (Blueprint $table) {
+            $table->id();
+            $table->string('slug')->unique();
+            $table->string('label');
+            $table->string('color', 32);
+            $table->unsignedInteger('sort')->default(0);
+            $table->boolean('is_system')->default(false);
+            $table->timestamps();
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('disbursement_methods');
+        Schema::dropIfExists('expense_articles');
         Schema::dropIfExists('advance_statuses');
         Schema::dropIfExists('event_types');
         Schema::dropIfExists('task_types');

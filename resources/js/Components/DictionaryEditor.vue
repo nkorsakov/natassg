@@ -5,8 +5,10 @@ import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 
 const props = defineProps({
     dictKey: { type: String, required: true },
-    title: { type: String, required: true },
+    title: { type: String, default: '' },
     withIcon: { type: Boolean, default: false },
+    /** Без внешней карточки и заголовка — для вкладок */
+    embedded: { type: Boolean, default: false },
 });
 
 const { mdAndUp } = useDisplay();
@@ -85,15 +87,19 @@ const remove = (id) => {
 </script>
 
 <template>
-    <v-card class="mb-4">
-        <div class="d-flex align-center justify-space-between px-5 pt-5 pb-2">
-            <h2 class="text-subtitle-1 font-weight-bold mb-0">{{ title }}</h2>
+    <component :is="embedded ? 'div' : 'v-card'" :class="embedded ? '' : 'mb-4'">
+        <div
+            class="d-flex align-center justify-space-between"
+            :class="embedded ? 'px-4 pt-4 pb-2' : 'px-5 pt-5 pb-2'"
+        >
+            <h2 v-if="!embedded && title" class="text-subtitle-1 font-weight-bold mb-0">{{ title }}</h2>
+            <div v-else />
             <v-btn size="small" color="primary" variant="tonal" prepend-icon="mdi-plus" @click="startAdd">
                 Добавить
             </v-btn>
         </div>
 
-        <div class="px-3 pb-3">
+        <div :class="embedded ? 'px-2 pb-3' : 'px-3 pb-3'">
             <div
                 v-for="item in items"
                 :key="item.id"
@@ -156,5 +162,5 @@ const remove = (id) => {
                 </div>
             </v-card>
         </v-dialog>
-    </v-card>
+    </component>
 </template>

@@ -43,6 +43,7 @@ class HandleInertiaRequests extends Middleware
                 'created_event_id' => fn () => $request->session()->get('created_event_id'),
                 'created_advance_id' => fn () => $request->session()->get('created_advance_id'),
                 'created_contact_id' => fn () => $request->session()->get('created_contact_id'),
+                'created_supplier_id' => fn () => $request->session()->get('created_supplier_id'),
             ],
         ];
     }

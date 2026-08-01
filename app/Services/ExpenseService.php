@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\Advance;
-use App\Models\Contact;
 use App\Models\Expense;
 use App\Models\Receipt;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Support\DictionaryResolver;
@@ -45,7 +45,7 @@ class ExpenseService
                 throw new InvalidArgumentException('Укажите статью расхода');
             }
 
-            $supplierId = $this->resolveSupplier($user, $data['supplier_contact_id'] ?? null);
+            $supplierId = $this->resolveSupplier($user, $data['supplier_id'] ?? null);
 
             $taskId = null;
             if (! empty($data['task_id'])) {
@@ -59,7 +59,7 @@ class ExpenseService
                 'user_id' => $user->id,
                 'advance_id' => $advance?->id,
                 'article_id' => $articleId,
-                'supplier_contact_id' => $supplierId,
+                'supplier_id' => $supplierId,
                 'task_id' => $taskId,
                 'amount_minor' => $amountMinor,
                 'description' => $data['description'] ?? null,
@@ -101,8 +101,8 @@ class ExpenseService
                 $expense->article_id = $articleId;
             }
 
-            if (array_key_exists('supplier_contact_id', $data)) {
-                $expense->supplier_contact_id = $this->resolveSupplier($user, $data['supplier_contact_id']);
+            if (array_key_exists('supplier_id', $data)) {
+                $expense->supplier_id = $this->resolveSupplier($user, $data['supplier_id']);
             }
 
             if (array_key_exists('description', $data)) {
@@ -216,26 +216,21 @@ class ExpenseService
         $receipt->delete();
     }
 
-    protected function resolveSupplier(User $user, mixed $contactId): int
+    protected function resolveSupplier(User $user, mixed $supplierId): int
     {
-        if ($contactId === null || $contactId === '') {
+        if ($supplierId === null || $supplierId === '') {
             throw new InvalidArgumentException('Укажите поставщика');
         }
 
-        $contact = Contact::query()
+        $supplier = Supplier::query()
             ->where('user_id', $user->id)
-            ->whereKey((int) $contactId)
+            ->whereKey((int) $supplierId)
             ->first();
 
-        if (! $contact) {
+        if (! $supplier) {
             throw new InvalidArgumentException('Поставщик не найден');
         }
 
-        if (! $contact->is_supplier) {
-            $contact->is_supplier = true;
-            $contact->save();
-        }
-
-        return (int) $contact->id;
+        return (int) $supplier->id;
     }
 }

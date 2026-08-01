@@ -22,6 +22,7 @@ class Task extends Model
         'note',
         'deadline',
         'closed_at',
+        'is_demo',
     ];
 
     protected function casts(): array
@@ -29,6 +30,7 @@ class Task extends Model
         return [
             'deadline' => 'datetime',
             'closed_at' => 'datetime',
+            'is_demo' => 'boolean',
         ];
     }
 

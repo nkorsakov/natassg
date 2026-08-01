@@ -1,0 +1,26 @@
+---
+description: НИКОГДА не делать migrate:fresh / wipe БД
+alwaysApply: true
+---
+
+# НИКОГДА НЕ ДЕЛАТЬ FRESH DB
+
+**НИКОГДА. НИ ПРИ КАКИХ ОБСТОЯТЕЛЬСТВАХ. НЕ ДЕЛАТЬ `migrate:fresh`, `db:wipe`, `schema:wipe`, `migrate:refresh` И АНАЛОГИ НА РАБОЧЕЙ / ОБЩЕЙ БД.**
+
+Запрещено без явного письменного разрешения пользователя в текущем сообщении:
+
+- `php artisan migrate:fresh`
+- `php artisan migrate:fresh --seed`
+- `php artisan migrate:refresh`
+- `php artisan db:wipe`
+- `php artisan schema:wipe`
+- любой `DROP DATABASE` / truncate всех таблиц «чтобы пересидить»
+- docker/compose-скрипты, которые пересоздают volume с данными
+
+Разрешено по умолчанию:
+
+- `php artisan migrate` (только новые миграции вперёд)
+- `php artisan demo:seed` / `php artisan demo:clear` (демо-данные с флагом `is_demo`)
+- точечные `DELETE`/`UPDATE` только того, о чём попросил пользователь
+
+Если кажется, что без fresh «не взлетело» — остановись и спроси. Данные важнее удобства агента.

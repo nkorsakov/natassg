@@ -7,6 +7,7 @@ use App\Models\Contact;
 use App\Models\DisbursementMethod;
 use App\Models\EventType;
 use App\Models\ExpenseArticle;
+use App\Models\Supplier;
 use App\Models\TaskPriority;
 use App\Models\TaskStatus;
 use App\Models\TaskType;
@@ -226,18 +227,118 @@ class SettingsController extends Controller
         return back();
     }
 
-    public function setSupplier(Request $request, Contact $contact): RedirectResponse
+    public function storeSupplier(Request $request): RedirectResponse
     {
-        abort_unless($contact->user_id === $request->user()->id, 403);
+        $user = $request->user();
 
         $data = $request->validate([
-            'is_supplier' => ['required', 'boolean'],
+            'name' => ['required', 'string', 'max:255'],
+            'contact_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('contacts', 'id')->where(fn ($q) => $q->where('user_id', $user->id)),
+                Rule::unique('suppliers', 'contact_id')->where(fn ($q) => $q->where('user_id', $user->id)),
+            ],
+            'note' => ['nullable', 'string'],
         ]);
 
-        $contact->is_supplier = (bool) $data['is_supplier'];
-        $contact->save();
+        $contact = null;
+        if (! empty($data['contact_id'])) {
+            $contact = Contact::query()
+                ->where('user_id', $user->id)
+                ->whereKey($data['contact_id'])
+                ->firstOrFail();
+        }
+
+        $supplier = Supplier::create([
+            'user_id' => $user->id,
+            'name' => trim($data['name']),
+            'contact_id' => $contact?->id,
+            'note' => $data['note'] ?? null,
+        ]);
+
+        if ($contact) {
+            $contact->is_supplier = true;
+            $contact->save();
+        }
+
+        return back()->with('created_supplier_id', $supplier->id);
+    }
+
+    public function updateSupplier(Request $request, Supplier $supplier): RedirectResponse
+    {
+        abort_unless($supplier->user_id === $request->user()->id, 403);
+
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'contact_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('contacts', 'id')->where(fn ($q) => $q->where('user_id', $user->id)),
+                Rule::unique('suppliers', 'contact_id')
+                    ->where(fn ($q) => $q->where('user_id', $user->id))
+                    ->ignore($supplier->id),
+            ],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $oldContactId = $supplier->contact_id;
+
+        if (isset($data['name'])) {
+            $supplier->name = trim($data['name']);
+        }
+        if (array_key_exists('note', $data)) {
+            $supplier->note = $data['note'];
+        }
+        if (array_key_exists('contact_id', $data)) {
+            $supplier->contact_id = $data['contact_id'] ?: null;
+        }
+
+        $supplier->save();
+
+        $this->syncContactSupplierFlags($user->id, array_filter([$oldContactId, $supplier->contact_id]));
 
         return back();
+    }
+
+    public function destroySupplier(Request $request, Supplier $supplier): RedirectResponse
+    {
+        abort_unless($supplier->user_id === $request->user()->id, 403);
+
+        if ($supplier->expenses()->exists()) {
+            return back()->withErrors(['supplier' => 'Нельзя удалить поставщика с тратами.']);
+        }
+
+        $contactId = $supplier->contact_id;
+        $supplier->delete();
+
+        if ($contactId) {
+            $this->syncContactSupplierFlags($request->user()->id, [$contactId]);
+        }
+
+        return back();
+    }
+
+    /** @param  array<int|null>  $contactIds */
+    protected function syncContactSupplierFlags(int $userId, array $contactIds): void
+    {
+        foreach (array_unique(array_filter($contactIds)) as $contactId) {
+            $contact = Contact::query()
+                ->where('user_id', $userId)
+                ->whereKey($contactId)
+                ->first();
+            if (! $contact) {
+                continue;
+            }
+            $linked = Supplier::query()
+                ->where('user_id', $userId)
+                ->where('contact_id', $contactId)
+                ->exists();
+            $contact->is_supplier = $linked;
+            $contact->save();
+        }
     }
 
     protected function ensureAdmin(Request $request): void

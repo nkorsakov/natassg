@@ -225,7 +225,21 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
                 <span class="skydesk-wordmark skydesk-wordmark--mobile">SkyDesk</span>
             </div>
             <template #append>
-                <AppearanceMenu />
+                <div class="d-flex align-center ga-1 pe-1">
+                    <v-btn
+                        icon
+                        variant="outlined"
+                        size="small"
+                        color="secondary"
+                        aria-label="Настройки"
+                        title="Настройки"
+                        :class="{ 'v-btn--active': isActive('/settings') }"
+                        @click="openSettings"
+                    >
+                        <v-icon>mdi-cog-outline</v-icon>
+                    </v-btn>
+                    <AppearanceMenu />
+                </div>
             </template>
         </v-app-bar>
 
@@ -240,7 +254,11 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
                             <slot name="subtitle">{{ subtitle }}</slot>
                         </p>
                     </div>
-                    <div v-if="mdAndUp && $slots.actions" class="d-flex align-center ga-2 flex-shrink-0">
+                    <div
+                        v-if="$slots.actions"
+                        class="d-flex align-center ga-2 flex-shrink-0 flex-wrap"
+                        :class="mdAndUp ? '' : 'w-100'"
+                    >
                         <slot name="actions" />
                     </div>
                 </div>

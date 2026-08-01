@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Advance;
 use App\Models\Expense;
 use App\Models\Receipt;
+use App\Models\WalletTransaction;
 use App\Services\AdvanceService;
 use App\Services\ExpenseService;
 use App\Services\WalletService;
@@ -28,10 +29,33 @@ class FinanceController extends Controller
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'gt:0'],
             'note' => ['nullable', 'string', 'max:255'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'disbursement_method_id' => ['required', 'string'],
         ]);
 
         try {
             $wallets->topUp($request->user(), $data);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['amount' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function updateTopUp(Request $request, WalletTransaction $transaction, WalletService $wallets): RedirectResponse
+    {
+        $transaction->loadMissing('wallet');
+        abort_unless($transaction->wallet?->user_id === $request->user()->id, 403);
+
+        $data = $request->validate([
+            'amount' => ['sometimes', 'numeric', 'gt:0'],
+            'note' => ['nullable', 'string', 'max:255'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'disbursement_method_id' => ['sometimes', 'string'],
+        ]);
+
+        try {
+            $wallets->updateTopUp($request->user(), $transaction, $data);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['amount' => $e->getMessage()]);
         }
@@ -100,6 +124,11 @@ class FinanceController extends Controller
         return $this->settleAction($request, $advance, fn () => $advances->writeOffUnknown($advance));
     }
 
+    public function storeFreeExpense(Request $request, ExpenseService $expenses): RedirectResponse
+    {
+        return $this->storeExpense($request, $expenses, null);
+    }
+
     public function storeExpense(Request $request, ExpenseService $expenses, ?Advance $advance = null): RedirectResponse
     {
         if ($advance) {
@@ -110,7 +139,7 @@ class FinanceController extends Controller
             'amount' => ['required', 'numeric', 'gt:0'],
             'description' => ['nullable', 'string', 'max:255'],
             'article_id' => ['required', 'string'],
-            'supplier_contact_id' => ['required', 'integer', 'exists:contacts,id'],
+            'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
             'task_id' => ['nullable', 'integer', 'exists:tasks,id'],
             'advance_id' => ['nullable', 'integer', 'exists:advances,id'],
         ]);
@@ -138,7 +167,7 @@ class FinanceController extends Controller
             'amount' => ['sometimes', 'numeric', 'gt:0'],
             'description' => ['nullable', 'string', 'max:255'],
             'article_id' => ['sometimes', 'string'],
-            'supplier_contact_id' => ['sometimes', 'integer', 'exists:contacts,id'],
+            'supplier_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
             'task_id' => ['nullable', 'integer', 'exists:tasks,id'],
         ]);
 

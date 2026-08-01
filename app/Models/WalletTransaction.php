@@ -28,12 +28,14 @@ class WalletTransaction extends Model
         'advance_id',
         'expense_id',
         'meta',
+        'is_demo',
     ];
 
     protected function casts(): array
     {
         return [
             'meta' => 'array',
+            'is_demo' => 'boolean',
         ];
     }
 

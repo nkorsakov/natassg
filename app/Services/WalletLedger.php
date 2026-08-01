@@ -15,7 +15,12 @@ class WalletLedger
     public function apply(User $user, string $type, int $amountMinor, array $links = []): WalletTransaction
     {
         return DB::transaction(function () use ($user, $type, $amountMinor, $links) {
-            $wallet = Wallet::where('user_id', $user->id)->lockForUpdate()->firstOrFail();
+            $wallet = Wallet::query()->firstOrCreate(
+                ['user_id' => $user->id],
+                ['balance_minor' => 0, 'currency' => 'RUB'],
+            );
+
+            $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
             $tx = WalletTransaction::create([
                 'wallet_id' => $wallet->id,

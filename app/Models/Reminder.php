@@ -20,6 +20,7 @@ class Reminder extends Model
         'message',
         'sent_at',
         'cancelled_at',
+        'is_demo',
     ];
 
     protected function casts(): array
@@ -28,6 +29,7 @@ class Reminder extends Model
             'remind_at' => 'datetime',
             'sent_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'is_demo' => 'boolean',
         ];
     }
 

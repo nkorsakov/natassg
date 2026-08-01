@@ -12,11 +12,19 @@ class Expense extends Model
         'user_id',
         'advance_id',
         'article_id',
-        'supplier_contact_id',
+        'supplier_id',
         'task_id',
         'amount_minor',
         'description',
+        'is_demo',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_demo' => 'boolean',
+        ];
+    }
 
     public function user(): BelongsTo
     {
@@ -35,7 +43,7 @@ class Expense extends Model
 
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(Contact::class, 'supplier_contact_id');
+        return $this->belongsTo(Supplier::class);
     }
 
     public function task(): BelongsTo
@@ -46,10 +54,5 @@ class Expense extends Model
     public function receipts(): HasMany
     {
         return $this->hasMany(Receipt::class);
-    }
-
-    public function walletTransaction(): BelongsTo
-    {
-        return $this->belongsTo(WalletTransaction::class);
     }
 }
