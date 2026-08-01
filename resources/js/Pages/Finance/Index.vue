@@ -219,12 +219,43 @@ const txSubtitle = (tx) => {
         subtitle="Кошелёк, авансы, свободные траты и движение."
         :show-fab="false"
     >
+        <template #actions>
+            <v-btn
+                variant="tonal"
+                prepend-icon="mdi-wallet-plus"
+                size="small"
+                class="flex-grow-1 flex-md-grow-0"
+                @click="openTopUpCreate"
+            >
+                Приход
+            </v-btn>
+            <v-btn
+                variant="tonal"
+                prepend-icon="mdi-receipt-text-plus"
+                size="small"
+                class="flex-grow-1 flex-md-grow-0"
+                @click="openFreeExpenseCreate"
+            >
+                Трата
+            </v-btn>
+            <v-btn
+                color="primary"
+                prepend-icon="mdi-cash-plus"
+                size="small"
+                class="flex-grow-1 flex-md-grow-0"
+                @click="createAdvance"
+            >
+                <span class="d-md-none">Заявка</span>
+                <span class="d-none d-md-inline">Заявка на аванс</span>
+            </v-btn>
+        </template>
+
         <v-card class="pa-5 mb-5 skydesk-accent-panel">
             <div class="text-caption font-weight-bold text-primary mb-1">На руках</div>
             <div class="text-h4 font-weight-bold" style="font-family:Fraunces,Georgia,serif;letter-spacing:-.03em">
                 {{ store.formatMoney(store.wallet.value.balance) }}
             </div>
-            <div class="d-flex flex-wrap ga-4 mt-3">
+            <div class="d-flex flex-wrap ga-4 mt-3 mb-4">
                 <div>
                     <div class="text-caption text-medium-emphasis">Свободно</div>
                     <div class="text-h6 font-weight-bold">{{ store.formatMoney(store.wallet.value.free) }}</div>
@@ -234,38 +265,8 @@ const txSubtitle = (tx) => {
                     <div class="text-h6 font-weight-bold">{{ store.formatMoney(store.wallet.value.in_advances) }}</div>
                 </div>
             </div>
-            <div class="d-flex flex-wrap ga-2 mt-4">
-                <v-btn
-                    variant="tonal"
-                    prepend-icon="mdi-wallet-plus"
-                    size="small"
-                    class="flex-grow-1 flex-sm-grow-0"
-                    @click="openTopUpCreate"
-                >
-                    Приход
-                </v-btn>
-                <v-btn
-                    variant="tonal"
-                    prepend-icon="mdi-receipt-text-plus"
-                    size="small"
-                    class="flex-grow-1 flex-sm-grow-0"
-                    @click="openFreeExpenseCreate"
-                >
-                    Трата
-                </v-btn>
-                <v-btn
-                    color="primary"
-                    prepend-icon="mdi-cash-plus"
-                    size="small"
-                    class="flex-grow-1 flex-sm-grow-0"
-                    @click="createAdvance"
-                >
-                    <span class="d-sm-none">Заявка</span>
-                    <span class="d-none d-sm-inline">Заявка на аванс</span>
-                </v-btn>
-            </div>
 
-            <v-divider class="my-4" />
+            <v-divider class="mb-4" />
 
             <h3 class="text-subtitle-2 font-weight-bold mb-3">История</h3>
             <div v-if="!transactions.length" class="text-caption text-medium-emphasis">Пока пусто.</div>
