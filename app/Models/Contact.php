@@ -16,7 +16,15 @@ class Contact extends Model
         'role',
         'phone',
         'note',
+        'is_supplier',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_supplier' => 'boolean',
+        ];
+    }
 
     public function user(): BelongsTo
     {

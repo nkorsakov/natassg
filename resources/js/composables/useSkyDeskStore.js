@@ -15,6 +15,8 @@ function emptyWorkspace() {
             taskTypes: [],
             eventTypes: [],
             advanceStatuses: [],
+            expenseArticles: [],
+            disbursementMethods: [],
         },
         tasks: [],
         events: [],
@@ -22,7 +24,7 @@ function emptyWorkspace() {
         expenses: [],
         receipts: [],
         contacts: [],
-        wallet: { balance: 0, currency: 'RUB' },
+        wallet: { balance: 0, free: 0, in_advances: 0, currency: 'RUB', transactions: [] },
     };
 }
 
@@ -68,6 +70,19 @@ export function useSkyDeskStore() {
         () => advances.value.filter((a) => a.status_id === 'pending').length,
     );
 
+    const upcomingEventCount = computed(() => {
+        const d = new Date();
+        d.setHours(12, 0, 0, 0);
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return events.value.filter((e) => String(e.start || '').slice(0, 10) >= today).length;
+    });
+
+    const contactCount = computed(() => contacts.value.length);
+
+    const financeAttentionCount = computed(
+        () => advances.value.filter((a) => ['pending', 'issued', 'reporting'].includes(a.status_id)).length,
+    );
+
     const formatMoney = (n) => `${Number(n || 0).toLocaleString('ru-RU')} ₽`;
 
     const getStatus = (id) => dictById(dictionaries.value.statuses, id);
@@ -75,11 +90,14 @@ export function useSkyDeskStore() {
     const getTaskType = (id) => dictById(dictionaries.value.taskTypes, id);
     const getEventType = (id) => dictById(dictionaries.value.eventTypes, id);
     const getAdvanceStatus = (id) => dictById(dictionaries.value.advanceStatuses, id);
+    const getExpenseArticle = (id) => dictById(dictionaries.value.expenseArticles, id);
+    const getDisbursementMethod = (id) => dictById(dictionaries.value.disbursementMethods, id);
 
     const getTask = (id) => tasks.value.find((t) => String(t.id) === String(id)) ?? null;
     const getEvent = (id) => events.value.find((e) => String(e.id) === String(id)) ?? null;
     const getAdvance = (id) => advances.value.find((a) => String(a.id) === String(id)) ?? null;
     const getContact = (id) => contacts.value.find((c) => String(c.id) === String(id)) ?? null;
+    const suppliers = computed(() => contacts.value.filter((c) => c.is_supplier));
 
     const childrenOf = (parentId) =>
         tasks.value.filter((t) => String(t.parent_id) === String(parentId));
@@ -109,7 +127,10 @@ export function useSkyDeskStore() {
     };
 
     const advancesForTask = (taskId) =>
-        advances.value.filter((a) => String(a.task_id) === String(taskId));
+        advances.value.filter((a) =>
+            (a.task_ids || []).map(String).includes(String(taskId))
+            || String(a.task_id) === String(taskId),
+        );
 
     const expensesForAdvance = (advanceId) => {
         const adv = getAdvance(advanceId);
@@ -168,7 +189,9 @@ export function useSkyDeskStore() {
     const createTask = (payload = {}) =>
         new Promise((resolve) => {
             router.post('/tasks', {
-                title: payload.title?.trim() || 'Новое поручение',
+                title: Object.prototype.hasOwnProperty.call(payload, 'title')
+                    ? String(payload.title ?? '').trim()
+                    : 'Новое поручение',
                 parent_id: payload.parent_id ?? null,
                 status_id: payload.status_id || 'new',
                 priority_id: payload.priority_id || 'normal',
@@ -237,10 +260,14 @@ export function useSkyDeskStore() {
     const createAdvance = (payload = {}) =>
         new Promise((resolve) => {
             router.post('/advances', {
-                title: payload.title?.trim() || 'Заявка на аванс',
+                title: Object.prototype.hasOwnProperty.call(payload, 'title')
+                    ? String(payload.title ?? '').trim()
+                    : '',
                 task_id: payload.task_id ?? null,
+                task_ids: payload.task_ids ?? null,
                 amount: Number(payload.amount) || 0,
                 status_id: payload.status_id || 'pending',
+                disbursement_method_id: payload.disbursement_method_id || null,
                 note: payload.note || '',
             }, {
                 ...visitOpts,
@@ -256,49 +283,79 @@ export function useSkyDeskStore() {
     };
 
     const addExpense = (advanceId, payload = {}) => {
-        router.post(`/advances/${advanceId}/expenses`, {
+        const body = {
             amount: Number(payload.amount) || 0,
             description: payload.description || '',
-        }, visitOpts);
-        return null;
-    };
-
-    const addReceipt = (expenseId, fileOrName) => {
-        const advance = advances.value.find((a) =>
-            (a.expenses || []).some((e) => String(e.id) === String(expenseId)),
-        );
-        if (!advance) return null;
-        if (fileOrName instanceof File || fileOrName instanceof Blob) {
-            router.post(`/advances/${advance.id}/expenses/${expenseId}/receipts`, {
-                file: fileOrName,
-            }, { ...visitOpts, forceFormData: true });
+            article_id: payload.article_id,
+            supplier_contact_id: payload.supplier_contact_id,
+            task_id: payload.task_id ?? null,
+        };
+        if (advanceId) {
+            router.post(`/advances/${advanceId}/expenses`, body, visitOpts);
+        } else {
+            router.post('/expenses', body, visitOpts);
         }
         return null;
     };
 
-    const returnRemainderToWallet = (advanceId) => {
+    const updateExpense = (expenseId, patch) => {
+        debouncedPut(`expense-${expenseId}`, `/expenses/${expenseId}`, patch);
+    };
+
+    const removeExpense = (expenseId) => {
+        if (!window.confirm('Удалить трату? Баланс будет скорректирован.')) return;
+        router.delete(`/expenses/${expenseId}`, visitOpts);
+    };
+
+    const addReceipt = (expenseId, fileOrName) => {
+        if (!(fileOrName instanceof File || fileOrName instanceof Blob)) return null;
+        const advance = advances.value.find((a) =>
+            (a.expenses || []).some((e) => String(e.id) === String(expenseId)),
+        );
+        const url = advance
+            ? `/advances/${advance.id}/expenses/${expenseId}/receipts`
+            : `/expenses/${expenseId}/receipts`;
+        router.post(url, { file: fileOrName }, { ...visitOpts, forceFormData: true });
+        return null;
+    };
+
+    const removeReceipt = (expenseId, receiptId) => {
+        router.delete(`/expenses/${expenseId}/receipts/${receiptId}`, visitOpts);
+    };
+
+    const topUpWallet = (payload = {}) => {
+        router.post('/wallet/topups', {
+            amount: Number(payload.amount) || 0,
+            note: payload.note || '',
+        }, visitOpts);
+    };
+
+    const releaseRemainderToFree = (advanceId) => {
+        router.post(`/advances/${advanceId}/release`, {}, visitOpts);
+    };
+
+    const returnRemainderToBoss = (advanceId) => {
         router.post(`/advances/${advanceId}/return`, {}, visitOpts);
     };
 
-    const zeroAsUnknown = (advanceId) => {
-        router.post(`/advances/${advanceId}/zero`, {}, visitOpts);
+    const writeOffUnknown = (advanceId) => {
+        router.post(`/advances/${advanceId}/writeoff`, {}, visitOpts);
     };
 
-    const recordOverspend = (advanceId) => {
-        router.post(`/advances/${advanceId}/overspend`, {}, visitOpts);
-    };
-
-    const closeAdvanceWithSettlement = (advanceId) => {
-        router.post(`/advances/${advanceId}/settle`, {}, visitOpts);
+    const setSupplier = (contactId, isSupplier) => {
+        router.put(`/settings/suppliers/${contactId}`, { is_supplier: !!isSupplier }, visitOpts);
     };
 
     const createContact = (payload = {}) =>
         new Promise((resolve) => {
             router.post('/contacts', {
-                name: payload.name?.trim() || 'Новый контакт',
+                name: Object.prototype.hasOwnProperty.call(payload, 'name')
+                    ? String(payload.name ?? '').trim()
+                    : '',
                 role: payload.role || '',
                 phone: payload.phone || '',
                 note: payload.note || '',
+                is_supplier: !!payload.is_supplier,
             }, {
                 ...visitOpts,
                 onSuccess: (pageResult) => {
@@ -328,6 +385,17 @@ export function useSkyDeskStore() {
         router.delete(`/tasks/${taskId}/attachments/${attachmentId}`, visitOpts);
     };
 
+    const createTaskReminder = (taskId, payload = {}) => {
+        router.post(`/tasks/${taskId}/reminders`, {
+            remind_at: payload.remind_at,
+            message: payload.message || null,
+        }, visitOpts);
+    };
+
+    const removeTaskReminder = (taskId, reminderId) => {
+        router.delete(`/tasks/${taskId}/reminders/${reminderId}`, visitOpts);
+    };
+
     const resetStore = () => {
         // Данные теперь в БД — демо-сброс не применяется.
     };
@@ -346,16 +414,22 @@ export function useSkyDeskStore() {
         activeTaskCount,
         waitingMoneyCount,
         pendingAdvanceCount,
+        upcomingEventCount,
+        contactCount,
+        financeAttentionCount,
         formatMoney,
         getStatus,
         getPriority,
         getTaskType,
         getEventType,
         getAdvanceStatus,
+        getExpenseArticle,
+        getDisbursementMethod,
         getTask,
         getEvent,
         getAdvance,
         getContact,
+        suppliers,
         childrenOf,
         descendantsOf,
         tasksForEvent,
@@ -380,16 +454,22 @@ export function useSkyDeskStore() {
         createAdvance,
         updateAdvance,
         addExpense,
+        updateExpense,
+        removeExpense,
         addReceipt,
-        returnRemainderToWallet,
-        zeroAsUnknown,
-        recordOverspend,
-        closeAdvanceWithSettlement,
+        removeReceipt,
+        topUpWallet,
+        releaseRemainderToFree,
+        returnRemainderToBoss,
+        writeOffUnknown,
+        setSupplier,
         createContact,
         updateContact,
         removeContact,
         uploadTaskAttachment,
         removeTaskAttachment,
+        createTaskReminder,
+        removeTaskReminder,
         resetStore,
     };
 }

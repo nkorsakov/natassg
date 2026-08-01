@@ -58,12 +58,16 @@ const save = async () => {
                 <p class="text-body-2 text-medium-emphasis mb-3">
                     Достаточно названия — детали можно добавить в карточке.
                 </p>
-                <v-text-field
+                <v-textarea
                     v-model="title"
                     label="Что нужно сделать?"
                     placeholder="Например, купить цветы к ужину"
+                    rows="2"
+                    auto-grow
+                    max-rows="5"
                     autofocus
-                    @keyup.enter="save"
+                    hide-details="auto"
+                    @keydown.enter.exact.prevent="save"
                 />
             </v-card-text>
             <v-divider />

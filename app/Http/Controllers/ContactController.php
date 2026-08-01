@@ -22,14 +22,16 @@ class ContactController extends Controller
             'role' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:64'],
             'note' => ['nullable', 'string'],
+            'is_supplier' => ['sometimes', 'boolean'],
         ]);
 
         $contact = Contact::create([
             'user_id' => $request->user()->id,
-            'name' => $data['name'] ?: 'Новый контакт',
+            'name' => $data['name'] ?? '',
             'role' => $data['role'] ?? null,
             'phone' => $data['phone'] ?? null,
             'note' => $data['note'] ?? null,
+            'is_supplier' => (bool) ($data['is_supplier'] ?? false),
         ]);
 
         return back()->with('created_contact_id', $contact->id);
@@ -44,6 +46,7 @@ class ContactController extends Controller
             'role' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:64'],
             'note' => ['nullable', 'string'],
+            'is_supplier' => ['sometimes', 'boolean'],
         ]);
 
         $contact->fill($data)->save();

@@ -9,6 +9,11 @@ use Illuminate\Support\Facades\DB;
 
 class TaskService
 {
+    public function __construct(
+        protected ReminderService $reminders,
+    ) {
+    }
+
     public function create(User $user, array $data): Task
     {
         $statusId = DictionaryResolver::statusId($data['status_id'] ?? 'new');
@@ -21,7 +26,7 @@ class TaskService
             'status_id' => $statusId,
             'priority_id' => $priorityId,
             'type_id' => $typeId,
-            'title' => $data['title'] ?? 'Новое поручение',
+            'title' => array_key_exists('title', $data) ? (string) ($data['title'] ?? '') : 'Новое поручение',
             'note' => $data['note'] ?? null,
             'deadline' => $data['deadline'] ?? null,
         ]);
@@ -34,7 +39,9 @@ class TaskService
             $task->events()->syncWithoutDetaching(array_map('intval', $data['event_ids']));
         }
 
-        return $task->fresh(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children']);
+        $this->reminders->syncForTask($task);
+
+        return $task->fresh(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders']);
     }
 
     public function update(Task $task, array $data): Task
@@ -66,8 +73,9 @@ class TaskService
         }
 
         $task->save();
+        $this->reminders->syncForTask($task->fresh(['status']));
 
-        return $task->fresh(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children']);
+        return $task->fresh(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders']);
     }
 
     public function makeRoot(Task $task): Task
@@ -90,6 +98,8 @@ class TaskService
                 'status_id' => $doneId,
                 'closed_at' => now(),
             ]);
+
+            $this->reminders->cancelPendingForTasks($ids);
         });
     }
 

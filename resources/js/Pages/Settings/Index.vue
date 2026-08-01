@@ -4,12 +4,18 @@ import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import DictionaryEditor from '@/Components/DictionaryEditor.vue';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
+import UsersAdminPanel from '@/Components/UsersAdminPanel.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+
+const props = defineProps({
+    users: { type: Array, default: () => [] },
+});
 
 const page = usePage();
 const store = useSkyDeskStore();
 const authUser = computed(() => page.props.auth?.user);
 const flashStatus = computed(() => page.props.flash?.status);
+const isAdmin = computed(() => !!authUser.value?.is_admin);
 
 const profileForm = reactive({
     name: store.profile.value.name,
@@ -134,6 +140,8 @@ const logout = () => {
                         </v-btn>
                     </v-form>
                 </v-card>
+
+                <UsersAdminPanel v-if="isAdmin" :users="props.users" />
 
                 <v-card class="pa-5" variant="flat" border>
                     <h2 class="text-subtitle-2 font-weight-bold mb-2">Данные</h2>

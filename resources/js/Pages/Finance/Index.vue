@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
+import { dictChipStyle } from '@/utils/dictColor';
 
 const store = useSkyDeskStore();
 const { openAdvance, openTask } = useWorkspaceUi();
@@ -44,8 +45,8 @@ const summary = computed(() => {
 
 const createAdvance = async () => {
     const adv = await store.createAdvance({
-        title: 'Новая заявка на аванс',
-        amount: 10000,
+        title: '',
+        amount: 0,
         status_id: 'pending',
     });
     if (adv?.id) openAdvance(adv.id);
@@ -133,7 +134,7 @@ const createAdvance = async () => {
                         size="x-small"
                         class="skydesk-pill mt-1"
                         variant="tonal"
-                        :style="{ color: store.getAdvanceStatus(adv.status_id)?.color }"
+                        :style="dictChipStyle(store.getAdvanceStatus(adv.status_id)?.color)"
                     >
                         {{ store.getAdvanceStatus(adv.status_id)?.label }}
                     </v-chip>

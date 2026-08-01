@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import FullCalendar from '@fullcalendar/vue3';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -7,11 +8,18 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import ruLocale from '@fullcalendar/core/locales/ru';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import DateTimeFields from '@/Components/DateTimeFields.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
 
 const store = useSkyDeskStore();
 const { openEvent, openTask } = useWorkspaceUi();
+const page = usePage();
+
+const initialView = (() => {
+    const params = new URLSearchParams(String(page.url || '').split('?')[1] || '');
+    return params.get('view') === 'list' ? 'listFourWeeks' : 'dayGridMonth';
+})();
 
 const creating = ref(false);
 const draft = ref({
@@ -57,20 +65,27 @@ const calendarEvents = computed(() => {
 
 const calendarOptions = computed(() => ({
     plugins: [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin],
-    initialView: 'dayGridMonth',
-    initialDate: '2026-07-31',
+    initialView,
+    initialDate: new Date().toISOString().slice(0, 10),
     locale: ruLocale,
     headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+        left: 'prev title next',
+        center: '',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay,listFourWeeks today',
     },
     buttonText: {
         today: 'Сегодня',
-        month: 'Месяц',
-        week: 'Неделя',
+        month: 'Мес',
+        week: 'Нед',
         day: 'День',
         list: 'Список',
+    },
+    views: {
+        listFourWeeks: {
+            type: 'list',
+            duration: { weeks: 4 },
+            buttonText: 'Список',
+        },
     },
     height: 'auto',
     expandRows: true,
@@ -88,7 +103,7 @@ const calendarOptions = computed(() => ({
             title: '',
             type_id: 'meeting',
             start: info.dateStr.length > 10 ? info.dateStr.slice(0, 16) : `${info.dateStr}T10:00`,
-            allDay: info.allDay,
+            allDay: false,
         };
         creating.value = true;
     },
@@ -104,14 +119,13 @@ const calendarOptions = computed(() => ({
 
 const createEvent = async () => {
     if (!draft.value.title.trim()) return;
-    const ev = await store.createEvent({
+    await store.createEvent({
         title: draft.value.title.trim(),
         type_id: draft.value.type_id,
         start: draft.value.start,
         allDay: draft.value.allDay,
     });
     creating.value = false;
-    if (ev?.id) openEvent(ev.id);
 };
 </script>
 
@@ -121,10 +135,6 @@ const createEvent = async () => {
         subtitle="События и дедлайны поручений. Можно без задач — просто запись."
         :show-fab="false"
     >
-        <template #actions>
-            <v-btn color="primary" prepend-icon="mdi-plus" @click="creating = true">Новое событие</v-btn>
-        </template>
-
         <v-card class="pa-4 pa-md-5">
             <FullCalendar :options="calendarOptions" />
         </v-card>
@@ -141,7 +151,7 @@ const createEvent = async () => {
                     label="Тип"
                     class="mb-2"
                 />
-                <v-text-field v-model="draft.start" type="datetime-local" label="Начало" class="mb-2" />
+                <DateTimeFields v-model="draft.start" :all-day="draft.allDay" class="mb-2" />
                 <v-switch v-model="draft.allDay" label="Весь день" class="mb-2" />
                 <div class="d-flex justify-end ga-2">
                     <v-btn variant="tonal" @click="creating = false">Отмена</v-btn>
@@ -155,34 +165,97 @@ const createEvent = async () => {
 <style>
 .fc {
     --fc-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-    --fc-button-bg-color: rgb(var(--v-theme-primary));
-    --fc-button-border-color: rgb(var(--v-theme-primary));
-    --fc-button-hover-bg-color: rgba(var(--v-theme-primary), 0.85);
-    --fc-button-hover-border-color: rgba(var(--v-theme-primary), 0.85);
-    --fc-button-active-bg-color: rgba(var(--v-theme-primary), 0.75);
-    --fc-button-active-border-color: rgba(var(--v-theme-primary), 0.75);
+    --fc-button-bg-color: transparent;
+    --fc-button-border-color: rgba(var(--v-theme-on-surface), 0.16);
+    --fc-button-hover-bg-color: rgba(var(--v-theme-on-surface), 0.06);
+    --fc-button-hover-border-color: rgba(var(--v-theme-on-surface), 0.22);
+    --fc-button-active-bg-color: rgba(var(--v-theme-primary), 0.12);
+    --fc-button-active-border-color: rgba(var(--v-theme-primary), 0.28);
+    --fc-button-text-color: rgb(var(--v-theme-on-surface));
     --fc-today-bg-color: rgba(var(--v-theme-primary), 0.1);
     --fc-event-border-color: transparent;
     --fc-page-bg-color: transparent;
     --fc-neutral-bg-color: rgb(var(--v-theme-background));
     --fc-list-event-hover-bg-color: rgba(var(--v-theme-primary), 0.06);
-    --fc-button-text-color: rgb(var(--v-theme-on-primary));
     font-family: inherit;
 }
 
+.fc .fc-toolbar {
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.85rem !important;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.fc .fc-toolbar-chunk:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
 .fc .fc-toolbar-title {
-    font-size: 1.15rem;
+    font-size: 0.95rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: rgb(var(--v-theme-on-surface));
+    line-height: 1.2;
+    margin: 0;
+    min-width: 9.5rem;
+    text-align: center;
 }
 
 .fc .fc-button {
-    border-radius: 10px !important;
+    border-radius: 8px !important;
+    font-size: 0.75rem !important;
     font-weight: 600;
+    line-height: 1.2;
     text-transform: none;
+    letter-spacing: 0;
     box-shadow: none !important;
-    padding: 0.4em 0.75em;
+    padding: 0.28em 0.6em !important;
+    height: auto !important;
+}
+
+.fc .fc-button:focus {
+    box-shadow: none !important;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+    color: rgb(var(--v-theme-primary));
+    font-weight: 700;
+}
+
+.fc .fc-button-group {
+    display: inline-flex;
+}
+
+.fc .fc-button-group > .fc-button {
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+
+.fc .fc-button-group > .fc-button:first-child {
+    border-radius: 8px 0 0 8px !important;
+}
+
+.fc .fc-button-group > .fc-button:last-child {
+    border-radius: 0 8px 8px 0 !important;
+}
+
+.fc .fc-button-group > .fc-button:only-child {
+    border-radius: 8px !important;
+}
+
+.fc .fc-prev-button,
+.fc .fc-next-button {
+    padding-inline: 0.45em !important;
+    min-width: 1.85rem;
+    border-radius: 8px !important;
+}
+
+.fc .fc-today-button {
+    margin-left: 0.65rem !important;
 }
 
 .fc .fc-daygrid-day-number,
@@ -204,7 +277,7 @@ const createEvent = async () => {
 @media (max-width: 959px) {
     .fc .fc-toolbar {
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.45rem;
         align-items: stretch;
     }
 
@@ -212,7 +285,13 @@ const createEvent = async () => {
         display: flex;
         justify-content: center;
         flex-wrap: wrap;
-        gap: 0.25rem;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .fc .fc-toolbar-title {
+        font-size: 0.9rem;
+        text-align: center;
     }
 }
 </style>

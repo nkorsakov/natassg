@@ -35,7 +35,18 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'telegram_id' => 'integer',
         ];
+    }
+
+    public function routeNotificationForTelegram(): ?int
+    {
+        return $this->telegram_id ? (int) $this->telegram_id : null;
+    }
+
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(Reminder::class);
     }
 
     protected static function booted(): void

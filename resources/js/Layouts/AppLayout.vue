@@ -48,10 +48,10 @@ watch(mdAndUp, (v) => {
 
 const items = computed(() => [
     { title: 'Главная', icon: 'mdi-home-outline', href: '/dashboard', badge: null },
-    { title: 'Поручения', icon: 'mdi-check-circle-outline', href: '/tasks', badge: store.activeTaskCount.value },
-    { title: 'Календарь', icon: 'mdi-calendar-month-outline', href: '/calendar', badge: null },
-    { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: store.pendingAdvanceCount.value || null },
-    { title: 'Контакты', icon: 'mdi-account-outline', href: '/contacts', badge: null },
+    { title: 'Поручения', icon: 'mdi-check-circle-outline', href: '/tasks', badge: store.activeTaskCount.value || null },
+    { title: 'Календарь', icon: 'mdi-calendar-month-outline', href: '/calendar', badge: store.upcomingEventCount.value || null },
+    { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: store.financeAttentionCount.value || null },
+    { title: 'Контакты', icon: 'mdi-account-outline', href: '/contacts', badge: store.contactCount.value || null },
 ]);
 
 const currentPath = computed(() => page.url.split('?')[0]);
@@ -231,21 +231,17 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
 
         <v-main class="skydesk-main bg-background">
             <v-container :fluid="mdAndUp" :class="mdAndUp ? 'pa-8' : 'pa-4'" style="max-width:1560px">
-                <div class="d-flex align-end justify-space-between mb-6 flex-wrap ga-3">
-                    <div>
-                        <h1 class="skydesk-page-title mb-1">
+                <div class="d-flex align-center justify-space-between mb-4 flex-wrap ga-2">
+                    <div class="min-w-0">
+                        <h1 class="skydesk-page-title mb-0">
                             <slot name="heading">{{ title }}</slot>
                         </h1>
-                        <p v-if="subtitle || $slots.subtitle" class="text-body-2 text-medium-emphasis mb-0">
+                        <p v-if="subtitle || $slots.subtitle" class="text-caption text-medium-emphasis mb-0 mt-1">
                             <slot name="subtitle">{{ subtitle }}</slot>
                         </p>
                     </div>
-                    <div v-if="mdAndUp" class="d-flex ga-2">
-                        <slot name="actions">
-                            <v-btn v-if="showFab" color="primary" prepend-icon="mdi-plus" @click="openCreate">
-                                Новое поручение
-                            </v-btn>
-                        </slot>
+                    <div v-if="mdAndUp && $slots.actions" class="d-flex align-center ga-2 flex-shrink-0">
+                        <slot name="actions" />
                     </div>
                 </div>
 
@@ -470,7 +466,7 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
 
 .skydesk-page-title {
     font-family: Fraunces, Georgia, serif;
-    font-size: clamp(1.65rem, 2.4vw, 2rem);
+    font-size: clamp(1.35rem, 2vw, 1.6rem);
     font-weight: 700;
     letter-spacing: -0.03em;
     line-height: 1.15;

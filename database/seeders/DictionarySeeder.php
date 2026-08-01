@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\AdvanceStatus;
+use App\Models\DisbursementMethod;
 use App\Models\EventType;
+use App\Models\ExpenseArticle;
 use App\Models\TaskPriority;
 use App\Models\TaskStatus;
 use App\Models\TaskType;
@@ -64,6 +66,25 @@ class DictionarySeeder extends Seeder
         ];
         foreach ($advanceStatuses as $row) {
             AdvanceStatus::updateOrCreate(['slug' => $row['slug']], $row);
+        }
+
+        $articles = [
+            ['slug' => 'transport', 'label' => 'Транспорт', 'color' => '#5B8DEF', 'sort' => 10, 'is_system' => true],
+            ['slug' => 'food', 'label' => 'Еда', 'color' => '#FFAD4D', 'sort' => 20, 'is_system' => true],
+            ['slug' => 'supplies', 'label' => 'Материалы', 'color' => '#6957EE', 'sort' => 30, 'is_system' => true],
+            ['slug' => 'services', 'label' => 'Услуги', 'color' => '#0D9488', 'sort' => 40, 'is_system' => true],
+            ['slug' => 'other', 'label' => 'Прочее', 'color' => '#9A9BA3', 'sort' => 50, 'is_system' => true],
+        ];
+        foreach ($articles as $row) {
+            ExpenseArticle::updateOrCreate(['slug' => $row['slug']], $row);
+        }
+
+        $methods = [
+            ['slug' => 'transfer', 'label' => 'Перевод', 'color' => '#6957EE', 'sort' => 10, 'is_system' => true],
+            ['slug' => 'cash_office', 'label' => 'Наличка в офисе', 'color' => '#0D9488', 'sort' => 20, 'is_system' => true],
+        ];
+        foreach ($methods as $row) {
+            DisbursementMethod::updateOrCreate(['slug' => $row['slug']], $row);
         }
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PasswordController;
+use App\Http\Controllers\ReminderController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
@@ -32,6 +33,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/tasks/{task}/events/{event}', [TaskController::class, 'unlinkEvent'])->name('tasks.unlink-event');
     Route::post('/tasks/{task}/attachments', [TaskController::class, 'storeAttachment'])->name('tasks.attachments.store');
     Route::delete('/tasks/{task}/attachments/{attachment}', [TaskController::class, 'destroyAttachment'])->name('tasks.attachments.destroy');
+    Route::post('/tasks/{task}/reminders', [ReminderController::class, 'store'])->name('tasks.reminders.store');
+    Route::delete('/tasks/{task}/reminders/{reminder}', [ReminderController::class, 'destroy'])->name('tasks.reminders.destroy');
 
     Route::get('/calendar', [EventController::class, 'index'])->name('calendar.index');
     Route::post('/events', [EventController::class, 'store'])->name('events.store');
@@ -39,14 +42,19 @@ Route::middleware('auth')->group(function () {
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
 
     Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
+    Route::post('/wallet/topups', [FinanceController::class, 'topUp'])->name('wallet.topups');
     Route::post('/advances', [FinanceController::class, 'storeAdvance'])->name('advances.store');
     Route::put('/advances/{advance}', [FinanceController::class, 'updateAdvance'])->name('advances.update');
+    Route::post('/advances/{advance}/release', [FinanceController::class, 'release'])->name('advances.release');
     Route::post('/advances/{advance}/return', [FinanceController::class, 'returnRemainder'])->name('advances.return');
-    Route::post('/advances/{advance}/zero', [FinanceController::class, 'zeroUnknown'])->name('advances.zero');
-    Route::post('/advances/{advance}/overspend', [FinanceController::class, 'overspend'])->name('advances.overspend');
-    Route::post('/advances/{advance}/settle', [FinanceController::class, 'settle'])->name('advances.settle');
+    Route::post('/advances/{advance}/writeoff', [FinanceController::class, 'writeOff'])->name('advances.writeoff');
     Route::post('/advances/{advance}/expenses', [FinanceController::class, 'storeExpense'])->name('advances.expenses.store');
-    Route::post('/advances/{advance}/expenses/{expense}/receipts', [FinanceController::class, 'storeReceipt'])->name('advances.receipts.store');
+    Route::post('/advances/{advance}/expenses/{expense}/receipts', [FinanceController::class, 'storeAdvanceReceipt'])->name('advances.receipts.store');
+    Route::post('/expenses', [FinanceController::class, 'storeExpense'])->name('expenses.store');
+    Route::put('/expenses/{expense}', [FinanceController::class, 'updateExpense'])->name('expenses.update');
+    Route::delete('/expenses/{expense}', [FinanceController::class, 'destroyExpense'])->name('expenses.destroy');
+    Route::post('/expenses/{expense}/receipts', [FinanceController::class, 'storeReceipt'])->name('expenses.receipts.store');
+    Route::delete('/expenses/{expense}/receipts/{receipt}', [FinanceController::class, 'destroyReceipt'])->name('expenses.receipts.destroy');
 
     Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
     Route::post('/contacts', [ContactController::class, 'store'])->name('contacts.store');
@@ -56,7 +64,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::put('/settings/profile', [SettingsController::class, 'updateProfile'])->name('settings.profile');
     Route::put('/settings/password', [PasswordController::class, 'update'])->name('password.update');
+    Route::post('/settings/users', [SettingsController::class, 'storeUser'])->name('settings.users.store');
+    Route::put('/settings/users/{user}', [SettingsController::class, 'updateUser'])->name('settings.users.update');
     Route::post('/settings/dictionaries/{key}', [SettingsController::class, 'storeDict'])->name('settings.dict.store');
     Route::put('/settings/dictionaries/{key}/{slug}', [SettingsController::class, 'updateDict'])->name('settings.dict.update');
     Route::delete('/settings/dictionaries/{key}/{slug}', [SettingsController::class, 'destroyDict'])->name('settings.dict.destroy');
+    Route::put('/settings/suppliers/{contact}', [SettingsController::class, 'setSupplier'])->name('settings.suppliers.update');
 });

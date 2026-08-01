@@ -7,11 +7,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WalletTransaction extends Model
 {
+    public const TYPE_TOPUP = 'topup';
+
+    public const TYPE_ISSUE = 'issue';
+
+    public const TYPE_EXPENSE = 'expense';
+
+    public const TYPE_RETURN = 'return';
+
+    public const TYPE_WRITEOFF = 'writeoff';
+
+    public const TYPE_AMOUNT_ADJUST = 'amount_adjust';
+
+    public const TYPE_RELEASE = 'release';
+
     protected $fillable = [
         'wallet_id',
         'type',
         'amount_minor',
         'advance_id',
+        'expense_id',
         'meta',
     ];
 
@@ -30,5 +45,10 @@ class WalletTransaction extends Model
     public function advance(): BelongsTo
     {
         return $this->belongsTo(Advance::class);
+    }
+
+    public function expense(): BelongsTo
+    {
+        return $this->belongsTo(Expense::class);
     }
 }

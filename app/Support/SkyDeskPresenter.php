@@ -5,10 +5,12 @@ namespace App\Support;
 use App\Models\Advance;
 use App\Models\CalendarEvent;
 use App\Models\Contact;
+use App\Models\Expense;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\User;
 use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Support\Facades\Storage;
 
 class SkyDeskPresenter
@@ -54,13 +56,15 @@ class SkyDeskPresenter
             'taskTypes' => $map(\App\Models\TaskType::orderBy('sort')->get()),
             'eventTypes' => $map(\App\Models\EventType::orderBy('sort')->get()),
             'advanceStatuses' => $map(\App\Models\AdvanceStatus::orderBy('sort')->get()),
+            'expenseArticles' => $map(\App\Models\ExpenseArticle::orderBy('sort')->get()),
+            'disbursementMethods' => $map(\App\Models\DisbursementMethod::orderBy('sort')->get()),
         ];
     }
 
     public static function workspace(User $user): array
     {
         $tasks = $user->tasks()
-            ->with(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children'])
+            ->with(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders' => fn ($q) => $q->pending()->orderBy('remind_at')])
             ->orderByDesc('id')
             ->get();
 
@@ -70,12 +74,23 @@ class SkyDeskPresenter
             ->get();
 
         $advances = $user->advances()
-            ->with(['status', 'task', 'expenses.receipts'])
+            ->with(['status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier'])
+            ->orderByDesc('id')
+            ->get();
+
+        $expenses = Expense::query()
+            ->where('user_id', $user->id)
+            ->with(['receipts', 'article', 'supplier'])
             ->orderByDesc('id')
             ->get();
 
         $contacts = $user->contacts()->orderBy('name')->get();
         $wallet = $user->wallet;
+        if ($wallet) {
+            $wallet->load(['transactions' => fn ($q) => $q->orderByDesc('id')->limit(100)]);
+        }
+
+        $presentedAdvances = $advances->map(fn (Advance $a) => self::advance($a))->values();
 
         return [
             'profile' => [
@@ -86,26 +101,29 @@ class SkyDeskPresenter
             'dictionaries' => self::dictionaries(),
             'tasks' => $tasks->map(fn (Task $t) => self::task($t))->values(),
             'events' => $events->map(fn (CalendarEvent $e) => self::event($e))->values(),
-            'advances' => $advances->map(fn (Advance $a) => self::advance($a))->values(),
+            'advances' => $presentedAdvances,
             'contacts' => $contacts->map(fn (Contact $c) => self::contact($c))->values(),
-            'wallet' => self::wallet($wallet),
-            'expenses' => $advances->flatMap(fn (Advance $a) => collect(self::advance($a)['expenses'])->map(
-                fn ($e) => [...$e, 'advance_id' => $a->id]
-            ))->values(),
-            'receipts' => $advances->flatMap(fn (Advance $a) => $a->expenses->flatMap(
-                fn ($e) => $e->receipts->map(fn ($r) => [
+            'wallet' => self::wallet($wallet, $presentedAdvances),
+            'expenses' => $expenses->map(fn (Expense $e) => self::expense($e))->values(),
+            'receipts' => $expenses->flatMap(
+                fn (Expense $e) => $e->receipts->map(fn ($r) => [
                     'id' => $r->id,
                     'expense_id' => $e->id,
                     'name' => $r->original_name,
                     'url' => Storage::disk('public')->url($r->path),
                 ])
-            ))->values(),
+            )->values(),
         ];
     }
 
     public static function task(Task $task): array
     {
-        $task->loadMissing(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children']);
+        $task->loadMissing(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders']);
+
+        $pendingReminders = $task->reminders
+            ->filter(fn ($r) => $r->sent_at === null && $r->cancelled_at === null)
+            ->sortBy('remind_at')
+            ->values();
 
         return [
             'id' => $task->id,
@@ -120,6 +138,12 @@ class SkyDeskPresenter
             'advance_ids' => $task->advances->pluck('id')->values(),
             'children_count' => $task->children->count(),
             'attachments' => $task->attachments->map(fn (TaskAttachment $a) => self::attachment($a))->values(),
+            'reminders' => $pendingReminders->map(fn ($r) => [
+                'id' => $r->id,
+                'kind' => $r->kind,
+                'remind_at' => optional($r->remind_at)?->format('Y-m-d\TH:i'),
+                'message' => $r->message,
+            ])->values(),
         ];
     }
 
@@ -156,33 +180,45 @@ class SkyDeskPresenter
 
     public static function advance(Advance $advance): array
     {
-        $advance->loadMissing(['status', 'task', 'expenses.receipts']);
+        $advance->loadMissing(['status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
         $spent = (int) $advance->expenses->sum('amount_minor');
         $amount = DictionaryResolver::minorToRubles((int) $advance->amount_minor);
 
         return [
             'id' => $advance->id,
             'title' => $advance->title,
-            'task_id' => $advance->task_id,
+            'task_id' => $advance->tasks->first()?->id,
+            'task_ids' => $advance->tasks->pluck('id')->values(),
             'amount' => $amount,
             'amount_minor' => $advance->amount_minor,
             'note' => $advance->note ?? '',
             'status_id' => $advance->status?->slug,
+            'disbursement_method_id' => $advance->disbursementMethod?->slug,
             'expense_ids' => $advance->expenses->pluck('id')->values(),
             'spent' => DictionaryResolver::minorToRubles($spent),
             'remaining' => DictionaryResolver::minorToRubles((int) $advance->amount_minor - $spent),
-            'expenses' => $advance->expenses->map(fn ($e) => [
-                'id' => $e->id,
-                'advance_id' => $advance->id,
-                'amount' => DictionaryResolver::minorToRubles((int) $e->amount_minor),
-                'description' => $e->description ?? '',
-                'receipt_ids' => $e->receipts->pluck('id')->values(),
-                'receipts' => $e->receipts->map(fn ($r) => [
-                    'id' => $r->id,
-                    'expense_id' => $e->id,
-                    'name' => $r->original_name,
-                    'url' => Storage::disk('public')->url($r->path),
-                ])->values(),
+            'expenses' => $advance->expenses->map(fn ($e) => self::expense($e))->values(),
+        ];
+    }
+
+    public static function expense(Expense $expense): array
+    {
+        $expense->loadMissing(['receipts', 'article', 'supplier']);
+
+        return [
+            'id' => $expense->id,
+            'advance_id' => $expense->advance_id,
+            'task_id' => $expense->task_id,
+            'article_id' => $expense->article?->slug,
+            'supplier_contact_id' => $expense->supplier_contact_id,
+            'amount' => DictionaryResolver::minorToRubles((int) $expense->amount_minor),
+            'description' => $expense->description ?? '',
+            'receipt_ids' => $expense->receipts->pluck('id')->values(),
+            'receipts' => $expense->receipts->map(fn ($r) => [
+                'id' => $r->id,
+                'expense_id' => $expense->id,
+                'name' => $r->original_name,
+                'url' => Storage::disk('public')->url($r->path),
             ])->values(),
         ];
     }
@@ -195,17 +231,53 @@ class SkyDeskPresenter
             'role' => $contact->role ?? '',
             'phone' => $contact->phone ?? '',
             'note' => $contact->note ?? '',
+            'is_supplier' => (bool) $contact->is_supplier,
         ];
     }
 
-    public static function wallet(?Wallet $wallet): array
+    public static function wallet(?Wallet $wallet, $advances = null): array
     {
-        $minor = $wallet?->balance_minor ?? 0;
+        $minor = (int) ($wallet?->balance_minor ?? 0);
+
+        $inAdvancesMinor = 0;
+        if ($advances) {
+            foreach ($advances as $a) {
+                $status = is_array($a) ? ($a['status_id'] ?? null) : $a->status?->slug;
+                if (! in_array($status, ['issued', 'reporting'], true)) {
+                    continue;
+                }
+                $remaining = is_array($a)
+                    ? DictionaryResolver::rublesToMinor($a['remaining'] ?? 0)
+                    : ((int) $a->amount_minor - (int) $a->expenses->sum('amount_minor'));
+                if ($remaining > 0) {
+                    $inAdvancesMinor += $remaining;
+                }
+            }
+        }
+
+        $transactions = [];
+        if ($wallet && $wallet->relationLoaded('transactions')) {
+            $transactions = $wallet->transactions->map(fn (WalletTransaction $tx) => [
+                'id' => $tx->id,
+                'type' => $tx->type,
+                'amount' => DictionaryResolver::minorToRubles((int) $tx->amount_minor),
+                'amount_minor' => $tx->amount_minor,
+                'advance_id' => $tx->advance_id,
+                'expense_id' => $tx->expense_id,
+                'meta' => $tx->meta,
+                'created_at' => optional($tx->created_at)?->toIso8601String(),
+            ])->values();
+        }
 
         return [
-            'balance' => DictionaryResolver::minorToRubles((int) $minor),
+            'balance' => DictionaryResolver::minorToRubles($minor),
             'balance_minor' => $minor,
+            'in_advances' => DictionaryResolver::minorToRubles($inAdvancesMinor),
+            'in_advances_minor' => $inAdvancesMinor,
+            'free' => DictionaryResolver::minorToRubles($minor - $inAdvancesMinor),
+            'free_minor' => $minor - $inAdvancesMinor,
             'currency' => $wallet?->currency ?? 'RUB',
+            'transactions' => $transactions,
         ];
     }
 }

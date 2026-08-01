@@ -3,7 +3,9 @@
 namespace App\Support;
 
 use App\Models\AdvanceStatus;
+use App\Models\DisbursementMethod;
 use App\Models\EventType;
+use App\Models\ExpenseArticle;
 use App\Models\TaskPriority;
 use App\Models\TaskStatus;
 use App\Models\TaskType;
@@ -34,6 +36,25 @@ class DictionaryResolver
     public static function advanceStatusId(string|int|null $value): ?int
     {
         return self::resolve(AdvanceStatus::class, $value);
+    }
+
+    public static function expenseArticleId(string|int|null $value): ?int
+    {
+        return self::resolve(ExpenseArticle::class, $value);
+    }
+
+    public static function disbursementMethodId(string|int|null $value): ?int
+    {
+        return self::resolve(DisbursementMethod::class, $value);
+    }
+
+    public static function statusSlugById(?int $id): ?string
+    {
+        if (! $id) {
+            return null;
+        }
+
+        return TaskStatus::query()->whereKey($id)->value('slug');
     }
 
     public static function rublesToMinor(mixed $amount): int

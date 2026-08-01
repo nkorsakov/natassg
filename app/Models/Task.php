@@ -68,13 +68,19 @@ class Task extends Model
             ->withTimestamps();
     }
 
-    public function advances(): HasMany
+    public function advances(): BelongsToMany
     {
-        return $this->hasMany(Advance::class);
+        return $this->belongsToMany(Advance::class, 'advance_task')
+            ->withTimestamps();
     }
 
     public function attachments(): HasMany
     {
         return $this->hasMany(TaskAttachment::class);
+    }
+
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(Reminder::class);
     }
 }

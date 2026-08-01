@@ -18,6 +18,11 @@ export default createVuetify({
         locale: 'ru',
         messages: { ru },
     },
+    date: {
+        locale: {
+            ru: 'ru-RU',
+        },
+    },
     icons: {
         defaultSet: 'mdi',
         aliases,
@@ -60,6 +65,7 @@ export default createVuetify({
         VTextField: { variant: 'outlined', density: 'comfortable', rounded: 'lg' },
         VSelect: { variant: 'outlined', density: 'comfortable', rounded: 'lg' },
         VTextarea: { variant: 'outlined', density: 'comfortable', rounded: 'lg' },
+        VDateInput: { variant: 'outlined', density: 'comfortable', rounded: 'lg' },
         VDialog: { scrim: 'rgba(27,28,36,.36)' },
     },
     display: {

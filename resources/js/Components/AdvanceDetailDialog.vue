@@ -1,8 +1,9 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { prepareUploadFile } from '@/utils/compressImage';
+import { dictDotStyle } from '@/utils/dictColor';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
@@ -15,6 +16,7 @@ const store = useSkyDeskStore();
 const receiptInput = ref(null);
 const receiptExpenseId = ref(null);
 const uploadingReceipt = ref(false);
+const titleInput = ref(null);
 
 const advance = computed(() => (props.advanceId ? store.getAdvance(props.advanceId) : null));
 const expenseList = computed(() =>
@@ -27,7 +29,7 @@ const taskItems = computed(() =>
 
 const form = reactive({
     title: '',
-    amount: 0,
+    amount: '',
     status_id: 'pending',
     task_id: null,
     note: '',
@@ -35,17 +37,29 @@ const form = reactive({
 
 const expenseDraft = reactive({ amount: '', description: '' });
 
+const isDraftTitle = (title) => {
+    const t = String(title || '').trim();
+    return !t || t === 'Новая заявка на аванс' || t === 'Заявка на аванс';
+};
+
 watch(
     () => [model.value, props.advanceId],
-    () => {
+    async () => {
         if (!model.value || !advance.value) return;
-        form.title = advance.value.title;
-        form.amount = advance.value.amount;
+        const draftTitle = isDraftTitle(advance.value.title);
+        const draftAmount = !Number(advance.value.amount);
+        form.title = draftTitle ? '' : advance.value.title;
+        form.amount = draftAmount ? '' : advance.value.amount;
         form.status_id = advance.value.status_id;
         form.task_id = advance.value.task_id;
         form.note = advance.value.note || '';
         expenseDraft.amount = '';
         expenseDraft.description = '';
+        if (draftTitle || draftAmount) {
+            await nextTick();
+            const el = titleInput.value?.$el?.querySelector?.('input');
+            el?.focus?.();
+        }
     },
     { immediate: true },
 );
@@ -55,7 +69,7 @@ watch(
     () => {
         if (!model.value || !props.advanceId) return;
         store.updateAdvance(props.advanceId, {
-            title: form.title.trim() || advance.value.title,
+            title: form.title.trim(),
             amount: Number(form.amount) || 0,
             status_id: form.status_id,
             task_id: form.task_id,
@@ -118,10 +132,22 @@ const onReceiptSelected = async (event) => {
             </v-card-title>
             <v-divider />
             <v-card-text class="px-6 py-5">
-                <v-text-field v-model="form.title" label="Название" class="mb-2" />
+                <v-text-field
+                    ref="titleInput"
+                    v-model="form.title"
+                    label="Название"
+                    placeholder="На что нужен аванс"
+                    class="mb-2"
+                />
                 <v-row dense>
                     <v-col cols="12" sm="6">
-                        <v-text-field v-model.number="form.amount" type="number" label="Сумма, ₽" />
+                        <v-text-field
+                            v-model="form.amount"
+                            type="number"
+                            label="Сумма, ₽"
+                            placeholder="0"
+                            min="0"
+                        />
                     </v-col>
                     <v-col cols="12" sm="6">
                         <v-select
@@ -130,7 +156,17 @@ const onReceiptSelected = async (event) => {
                             item-title="label"
                             item-value="id"
                             label="Статус"
-                        />
+                        >
+                            <template #selection>
+                                <span class="d-inline-flex align-center ga-2">
+                                    <span
+                                        style="width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0"
+                                        :style="dictDotStyle(store.getAdvanceStatus(form.status_id)?.color)"
+                                    />
+                                    <span>{{ store.getAdvanceStatus(form.status_id)?.label }}</span>
+                                </span>
+                            </template>
+                        </v-select>
                     </v-col>
                     <v-col cols="12">
                         <v-select

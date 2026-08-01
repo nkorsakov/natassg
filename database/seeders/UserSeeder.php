@@ -18,6 +18,7 @@ class UserSeeder extends Seeder
                 'initials' => 'НК',
                 'role_title' => 'Владелец',
                 'password' => $password,
+                'is_admin' => true,
                 'email_verified_at' => now(),
             ],
         );
@@ -29,6 +30,7 @@ class UserSeeder extends Seeder
                 'initials' => 'НЯ',
                 'role_title' => 'Личный помощник',
                 'password' => $password,
+                'is_admin' => false,
                 'email_verified_at' => now(),
             ],
         );
