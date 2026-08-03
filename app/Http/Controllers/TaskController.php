@@ -130,6 +130,6 @@ class TaskController extends Controller
 
     protected function authorizeTask(Request $request, Task $task): void
     {
-        abort_unless($task->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($task->user_id), 403);
     }
 }

@@ -11,10 +11,12 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import DateTimeFields from '@/Components/DateTimeFields.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 
 const store = useSkyDeskStore();
 const { openEvent, openTask } = useWorkspaceUi();
 const page = usePage();
+const { isAdmin } = useIsAdmin();
 
 const initialView = (() => {
     const params = new URLSearchParams(String(page.url || '').split('?')[1] || '');
@@ -29,19 +31,25 @@ const draft = ref({
     allDay: false,
 });
 
+const ownerPrefix = (item) => {
+    if (!isAdmin.value || !item?.user) return '';
+    const tag = item.user.initials || item.user.name;
+    return tag ? `${tag}: ` : '';
+};
+
 const calendarEvents = computed(() => {
     const fromEvents = store.events.value.map((ev) => {
         const type = store.getEventType(ev.type_id);
         return {
             id: ev.id,
-            title: ev.title,
+            title: `${ownerPrefix(ev)}${ev.title}`,
             start: ev.start,
             end: ev.end || undefined,
             allDay: ev.allDay,
             backgroundColor: type?.color || '#6957EE',
             borderColor: type?.color || '#6957EE',
             textColor: '#fff',
-            extendedProps: { kind: 'event' },
+            extendedProps: { kind: 'event', user: ev.user },
         };
     });
 
@@ -50,14 +58,14 @@ const calendarEvents = computed(() => {
         .filter((t) => !t.event_ids?.length)
         .map((t) => ({
             id: `deadline-${t.id}`,
-            title: `⏱ ${t.title}`,
+            title: `⏱ ${ownerPrefix(t)}${t.title}`,
             start: t.deadline,
             allDay: !String(t.deadline).includes('T'),
             backgroundColor: 'transparent',
             borderColor: store.getPriority(t.priority_id)?.color || '#9A9BA3',
             textColor: store.getPriority(t.priority_id)?.color || '#626571',
             display: 'list-item',
-            extendedProps: { kind: 'deadline', taskId: t.id },
+            extendedProps: { kind: 'deadline', taskId: t.id, user: t.user },
         }));
 
     return [...fromEvents, ...deadlines];

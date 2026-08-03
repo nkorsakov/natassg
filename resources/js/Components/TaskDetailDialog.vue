@@ -2,11 +2,13 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 import { prepareUploadFile } from '@/utils/compressImage';
 import { dictChipStyle, dictDotStyle } from '@/utils/dictColor';
 import { formatDisplayDate } from '@/utils/datetime';
 import { linkifyParts } from '@/utils/linkify';
 import DateTimeFields from '@/Components/DateTimeFields.vue';
+import OwnerBadge from '@/Components/OwnerBadge.vue';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
@@ -16,6 +18,7 @@ const emit = defineEmits(['open-task', 'open-event', 'open-advance']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
+const { isAdmin } = useIsAdmin();
 
 const confirmClose = ref(false);
 const linkEventId = ref(null);
@@ -128,7 +131,11 @@ const availableEvents = computed(() =>
         .filter((e) => !task.value?.event_ids?.includes(e.id))
         .map((e) => ({
             ...e,
-            label: `${formatDisplayDate(e.start, { allDay: e.allDay }) || 'без даты'} · ${e.title}`,
+            label: [
+                isAdmin.value && e.user?.initials ? e.user.initials : null,
+                formatDisplayDate(e.start, { allDay: e.allDay }) || 'без даты',
+                e.title,
+            ].filter(Boolean).join(' · '),
         })),
 );
 
@@ -366,6 +373,7 @@ const isDone = computed(
                     <span v-else class="skydesk-complete-label skydesk-complete-label--done">
                         Поручение выполнено
                     </span>
+                    <OwnerBadge :show="isAdmin" :user="task.user" />
                 </div>
                 <div class="d-flex ga-2 flex-shrink-0">
                     <v-btn

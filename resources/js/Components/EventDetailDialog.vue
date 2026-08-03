@@ -2,9 +2,11 @@
 import { computed, nextTick, ref, reactive, watch } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 import { dictChipStyle, dictDotStyle } from '@/utils/dictColor';
 import { formatDisplayDate } from '@/utils/datetime';
 import DateTimeFields from '@/Components/DateTimeFields.vue';
+import OwnerBadge from '@/Components/OwnerBadge.vue';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
@@ -14,6 +16,7 @@ const emit = defineEmits(['open-task', 'create-task']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
+const { isAdmin } = useIsAdmin();
 
 const linkTaskId = ref(null);
 const showPickTask = ref(false);
@@ -29,6 +32,7 @@ const availableTasks = computed(() =>
         .map((t) => ({
             ...t,
             label: [
+                isAdmin.value && t.user?.initials ? t.user.initials : null,
                 t.title,
                 formatDisplayDate(t.deadline, { withTime: String(t.deadline || '').includes('T') }) || null,
             ].filter(Boolean).join(' · '),
@@ -121,6 +125,10 @@ const stopEditTitle = () => {
         <v-card v-if="event" class="d-flex flex-column" :style="mdAndUp ? 'max-height:90vh' : 'min-height:100%'">
             <v-card-title class="d-flex align-center justify-space-between px-4 px-sm-5 pt-4 pb-3 ga-3">
                 <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex align-center ga-2 mb-1" v-if="isAdmin && event.user">
+                        <OwnerBadge :show="true" :user="event.user" />
+                        <span class="text-caption text-medium-emphasis text-truncate">{{ event.user.name }}</span>
+                    </div>
                     <div
                         v-if="!editingTitle"
                         class="skydesk-event-title-read"

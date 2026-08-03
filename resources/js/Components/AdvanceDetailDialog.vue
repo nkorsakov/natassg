@@ -2,8 +2,10 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 import { prepareUploadFile } from '@/utils/compressImage';
 import { dictDotStyle } from '@/utils/dictColor';
+import OwnerBadge from '@/Components/OwnerBadge.vue';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
@@ -13,6 +15,7 @@ const emit = defineEmits(['open-task']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
+const { isAdmin } = useIsAdmin();
 const receiptInput = ref(null);
 const receiptExpenseId = ref(null);
 const uploadingReceipt = ref(false);
@@ -28,7 +31,12 @@ const statusItems = computed(() => store.dictionaries.value.advanceStatuses || [
 const methodItems = computed(() => store.dictionaries.value.disbursementMethods || []);
 const articleItems = computed(() => store.dictionaries.value.expenseArticles || []);
 const taskItems = computed(() =>
-    store.tasks.value.map((t) => ({ id: t.id, title: t.title })),
+    store.tasks.value.map((t) => ({
+        id: t.id,
+        title: isAdmin.value && t.user?.initials
+            ? `${t.user.initials}: ${t.title}`
+            : t.title,
+    })),
 );
 const supplierItems = computed(() =>
     store.suppliers.value.map((s) => ({
@@ -225,7 +233,11 @@ const openFirstTask = () => {
         <v-card v-if="advance" class="d-flex flex-column" :style="mdAndUp ? 'max-height:90vh' : 'min-height:100%'">
             <v-card-title class="d-flex align-center justify-space-between px-6 pt-5">
                 <div>
-                    <div class="text-caption text-medium-emphasis mb-1">Аванс</div>
+                    <div class="text-caption text-medium-emphasis mb-1 d-flex align-center ga-2">
+                        Аванс
+                        <OwnerBadge :show="isAdmin" :user="advance.user" />
+                        <span v-if="isAdmin && advance.user?.name">{{ advance.user.name }}</span>
+                    </div>
                     <span class="text-h6 font-weight-bold">Заявка</span>
                 </div>
                 <v-btn icon variant="tonal" size="small" @click="model = false">

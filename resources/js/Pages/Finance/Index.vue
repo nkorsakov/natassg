@@ -1,12 +1,15 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import OwnerBadge from '@/Components/OwnerBadge.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 import { dictChipStyle } from '@/utils/dictColor';
 
 const store = useSkyDeskStore();
 const { openAdvance, openTask } = useWorkspaceUi();
+const { isAdmin } = useIsAdmin();
 
 const filter = ref('all');
 const showTopUp = ref(false);
@@ -331,7 +334,10 @@ const txSubtitle = (tx) => {
                 @click="openAdvance(adv.id)"
             >
                 <div class="flex-grow-1 min-w-0">
-                    <div class="text-body-1 font-weight-bold">{{ adv.title || 'Без названия' }}</div>
+                    <div class="d-flex align-center ga-2">
+                        <div class="text-body-1 font-weight-bold text-truncate">{{ adv.title || 'Без названия' }}</div>
+                        <OwnerBadge :show="isAdmin" :user="adv.user" />
+                    </div>
                     <div class="text-caption text-medium-emphasis">
                         {{ adv.note || 'Без описания' }}
                         <template v-for="tid in taskLabel(adv)" :key="tid">

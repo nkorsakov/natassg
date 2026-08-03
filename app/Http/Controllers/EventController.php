@@ -50,7 +50,7 @@ class EventController extends Controller
 
     public function update(Request $request, CalendarEvent $event): RedirectResponse
     {
-        abort_unless($event->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($event->user_id), 403);
 
         $data = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
@@ -97,7 +97,7 @@ class EventController extends Controller
 
     public function destroy(Request $request, CalendarEvent $event): RedirectResponse
     {
-        abort_unless($event->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($event->user_id), 403);
         $event->delete();
 
         return back();

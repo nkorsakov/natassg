@@ -15,6 +15,8 @@ const STORAGE_KEY = 'skydesk-appearance';
 const mode = ref('light');
 const accent = ref('violet');
 let wired = false;
+/** @type {import('vuetify').ThemeInstance | null} */
+let themeApi = null;
 
 function load() {
     try {
@@ -29,30 +31,70 @@ function load() {
 }
 
 function save() {
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ mode: mode.value, accent: accent.value }),
-    );
+    try {
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ mode: mode.value, accent: accent.value }),
+        );
+    } catch {
+        // ignore
+    }
 }
 
-function applyAccent(theme) {
-    const accentColor = ACCENTS.find((a) => a.id === accent.value)?.color ?? ACCENTS[0].color;
+function accentColor() {
+    return ACCENTS.find((a) => a.id === accent.value)?.color ?? ACCENTS[0].color;
+}
+
+function patchThemeColors(theme, color) {
+    const themes = theme?.themes?.value;
+    if (!themes) return;
+
     for (const name of ['light', 'dark']) {
-        const colors = theme.themes.value[name]?.colors;
-        if (!colors) continue;
-        colors.primary = accentColor;
-        colors.info = accentColor;
+        const current = themes[name];
+        if (!current?.colors) continue;
+        // Replace the theme object so Vuetify's computedThemes/styles always re-run.
+        themes[name] = {
+            ...current,
+            colors: {
+                ...current.colors,
+                primary: color,
+                info: color,
+            },
+        };
     }
-    document.documentElement.style.setProperty('--skydesk-accent', accentColor);
+
+    // Touch the root ref for shallow watchers.
+    theme.themes.value = { ...themes };
 }
 
-function apply(theme) {
+function applyAccent(theme = themeApi) {
+    if (!theme) return;
+    const color = accentColor();
+    patchThemeColors(theme, color);
+    document.documentElement.style.setProperty('--skydesk-accent', color);
+}
+
+async function apply(theme = themeApi) {
+    if (!theme) return;
+
     const themeName = mode.value === 'dark' ? 'dark' : 'light';
-    if (typeof theme.change === 'function') {
-        theme.change(themeName);
-    } else {
-        theme.global.name.value = themeName;
+
+    try {
+        // Avoid Vuetify view-transitions: change(false) still animates if origin was set.
+        theme.setTransitionOrigin?.(null);
+        if (theme.global?.name) {
+            theme.global.name.value = themeName;
+        } else if (typeof theme.change === 'function') {
+            await theme.change(themeName, false);
+        }
+    } catch {
+        try {
+            await theme.change?.(themeName, false);
+        } catch {
+            // ignore
+        }
     }
+
     applyAccent(theme);
     document.documentElement.dataset.theme = mode.value;
     document.documentElement.style.colorScheme = mode.value;
@@ -60,19 +102,23 @@ function apply(theme) {
 
 export function useAppearance() {
     const theme = useTheme();
+    themeApi = theme;
 
     if (!wired) {
         load();
         apply(theme);
         watch(mode, () => {
-            apply(theme);
+            apply(themeApi);
             save();
         });
         watch(accent, () => {
-            applyAccent(theme);
+            applyAccent(themeApi);
             save();
         });
         wired = true;
+    } else {
+        // Keep theme instance fresh after remounts / HMR.
+        applyAccent(theme);
     }
 
     const isDark = computed(() => mode.value === 'dark');
@@ -81,7 +127,14 @@ export function useAppearance() {
     );
 
     const setMode = (value) => {
-        if (value === 'light' || value === 'dark') mode.value = value;
+        const next = Array.isArray(value) ? value[0] : value;
+        if (next !== 'light' && next !== 'dark') return;
+        if (mode.value === next) {
+            // Force re-apply if UI got out of sync with Vuetify.
+            apply(themeApi);
+            return;
+        }
+        mode.value = next;
     };
 
     const toggleMode = () => {
@@ -89,7 +142,12 @@ export function useAppearance() {
     };
 
     const setAccent = (id) => {
-        if (ACCENTS.some((a) => a.id === id)) accent.value = id;
+        if (!ACCENTS.some((a) => a.id === id)) return;
+        if (accent.value === id) {
+            applyAccent(themeApi);
+            return;
+        }
+        accent.value = id;
     };
 
     return {

@@ -44,6 +44,15 @@ class User extends Authenticatable
         return $this->telegram_id ? (int) $this->telegram_id : null;
     }
 
+    public function canAccessOwned(?int $ownerId): bool
+    {
+        if ($this->is_admin) {
+            return true;
+        }
+
+        return $ownerId !== null && (int) $ownerId === (int) $this->id;
+    }
+
     public function reminders(): HasMany
     {
         return $this->hasMany(Reminder::class);

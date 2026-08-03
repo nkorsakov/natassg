@@ -2,13 +2,16 @@
 import { computed, ref } from 'vue';
 import { useDisplay } from 'vuetify';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import OwnerBadge from '@/Components/OwnerBadge.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 import { dictChipStyle } from '@/utils/dictColor';
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
 const { openTask } = useWorkspaceUi();
+const { isAdmin } = useIsAdmin();
 
 const filter = ref('all');
 
@@ -149,7 +152,10 @@ const filterChipStyle = (f) => {
                                 />
                             </div>
                             <div class="flex-grow-1 min-w-0 overflow-hidden">
-                                <div class="text-body-2 font-weight-bold skydesk-task-title">{{ task.title }}</div>
+                                <div class="d-flex align-center ga-2 mb-1">
+                                    <div class="text-body-2 font-weight-bold skydesk-task-title flex-grow-1">{{ task.title }}</div>
+                                    <OwnerBadge :show="isAdmin" :user="task.user" />
+                                </div>
                                 <div class="text-caption text-medium-emphasis text-truncate">
                                     <template v-if="task.deadline">{{ formatDeadline(task.deadline) }}</template>
                                     <template v-if="task.deadline && taskType(task)?.label"> · </template>

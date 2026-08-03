@@ -19,25 +19,28 @@ const { mode, accent, accents, setMode, setAccent } = useAppearance();
             </v-btn>
         </template>
 
-        <v-card min-width="240" class="pa-4">
+        <v-card min-width="240" class="pa-4" @click.stop>
             <div class="text-caption font-weight-bold text-medium-emphasis mb-2">Тема</div>
-            <v-btn-toggle
-                :model-value="mode"
-                mandatory
-                density="comfortable"
-                color="primary"
-                variant="outlined"
-                divided
-                class="w-100 mb-4"
-                @update:model-value="setMode"
-            >
-                <v-btn value="light" class="flex-grow-1" prepend-icon="mdi-white-balance-sunny">
+            <div class="d-flex ga-2 mb-4">
+                <v-btn
+                    class="flex-grow-1"
+                    :variant="mode === 'light' ? 'flat' : 'outlined'"
+                    :color="mode === 'light' ? 'primary' : 'secondary'"
+                    prepend-icon="mdi-white-balance-sunny"
+                    @click.stop="setMode('light')"
+                >
                     Светлая
                 </v-btn>
-                <v-btn value="dark" class="flex-grow-1" prepend-icon="mdi-moon-waning-crescent">
+                <v-btn
+                    class="flex-grow-1"
+                    :variant="mode === 'dark' ? 'flat' : 'outlined'"
+                    :color="mode === 'dark' ? 'primary' : 'secondary'"
+                    prepend-icon="mdi-moon-waning-crescent"
+                    @click.stop="setMode('dark')"
+                >
                     Тёмная
                 </v-btn>
-            </v-btn-toggle>
+            </div>
 
             <div class="text-caption font-weight-bold text-medium-emphasis mb-2">Цвет кнопок</div>
             <div class="d-flex flex-wrap ga-2">
@@ -50,7 +53,7 @@ const { mode, accent, accents, setMode, setAccent } = useAppearance();
                     :style="{ background: item.color }"
                     :title="item.label"
                     :aria-label="item.label"
-                    @click="setAccent(item.id)"
+                    @click.stop="setAccent(item.id)"
                 >
                     <v-icon v-if="accent === item.id" size="16" color="white">mdi-check</v-icon>
                 </button>

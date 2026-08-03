@@ -45,7 +45,7 @@ class FinanceController extends Controller
     public function updateTopUp(Request $request, WalletTransaction $transaction, WalletService $wallets): RedirectResponse
     {
         $transaction->loadMissing('wallet');
-        abort_unless($transaction->wallet?->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($transaction->wallet?->user_id), 403);
 
         $data = $request->validate([
             'amount' => ['sometimes', 'numeric', 'gt:0'],
@@ -87,7 +87,7 @@ class FinanceController extends Controller
 
     public function updateAdvance(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
     {
-        abort_unless($advance->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
 
         $data = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
@@ -132,7 +132,7 @@ class FinanceController extends Controller
     public function storeExpense(Request $request, ExpenseService $expenses, ?Advance $advance = null): RedirectResponse
     {
         if ($advance) {
-            abort_unless($advance->user_id === $request->user()->id, 403);
+            abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
         }
 
         $data = $request->validate([
@@ -147,7 +147,7 @@ class FinanceController extends Controller
         $target = $advance;
         if (! $target && ! empty($data['advance_id'])) {
             $target = Advance::query()->findOrFail($data['advance_id']);
-            abort_unless($target->user_id === $request->user()->id, 403);
+            abort_unless($request->user()?->canAccessOwned($target->user_id), 403);
         }
 
         try {
@@ -161,7 +161,7 @@ class FinanceController extends Controller
 
     public function updateExpense(Request $request, Expense $expense, ExpenseService $expenses): RedirectResponse
     {
-        abort_unless($expense->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
 
         $data = $request->validate([
             'amount' => ['sometimes', 'numeric', 'gt:0'],
@@ -182,7 +182,7 @@ class FinanceController extends Controller
 
     public function destroyExpense(Request $request, Expense $expense, ExpenseService $expenses): RedirectResponse
     {
-        abort_unless($expense->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
 
         try {
             $expenses->destroyExpense($request->user(), $expense);
@@ -198,7 +198,7 @@ class FinanceController extends Controller
         Expense $expense,
         ExpenseService $expenses,
     ): RedirectResponse {
-        abort_unless($expense->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
 
         $data = $request->validate([
             'file' => ['required', 'file', 'max:20480'],
@@ -215,7 +215,7 @@ class FinanceController extends Controller
         Expense $expense,
         ExpenseService $expenses,
     ): RedirectResponse {
-        abort_unless($advance->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
         abort_unless($expense->advance_id === $advance->id, 404);
 
         return $this->storeReceipt($request, $expense, $expenses);
@@ -227,7 +227,7 @@ class FinanceController extends Controller
         Receipt $receipt,
         ExpenseService $expenses,
     ): RedirectResponse {
-        abort_unless($expense->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
         abort_unless($receipt->expense_id === $expense->id, 404);
 
         $expenses->destroyReceipt($receipt);
@@ -237,7 +237,7 @@ class FinanceController extends Controller
 
     protected function settleAction(Request $request, Advance $advance, callable $action): RedirectResponse
     {
-        abort_unless($advance->user_id === $request->user()->id, 403);
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
 
         try {
             $action();

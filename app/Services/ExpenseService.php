@@ -6,6 +6,7 @@ use App\Models\Advance;
 use App\Models\Expense;
 use App\Models\Receipt;
 use App\Models\Supplier;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Support\DictionaryResolver;
@@ -27,7 +28,7 @@ class ExpenseService
         return DB::transaction(function () use ($user, $data, $advance) {
             if ($advance) {
                 $advance = Advance::whereKey($advance->id)->lockForUpdate()->with('status')->firstOrFail();
-                if ($advance->user_id !== $user->id) {
+                if (! $user->canAccessOwned($advance->user_id)) {
                     throw new InvalidArgumentException('Чужой аванс');
                 }
             }
@@ -45,18 +46,20 @@ class ExpenseService
                 throw new InvalidArgumentException('Укажите статью расхода');
             }
 
-            $supplierId = $this->resolveSupplier($user, $data['supplier_id'] ?? null);
+            $owner = $this->resolveOwner($user, $advance?->user_id);
+            $supplierId = $this->resolveSupplier($owner, $data['supplier_id'] ?? null);
 
             $taskId = null;
             if (! empty($data['task_id'])) {
                 $taskId = (int) $data['task_id'];
-                if (! $user->tasks()->whereKey($taskId)->exists()) {
+                $task = Task::query()->find($taskId);
+                if (! $task || ! $user->canAccessOwned($task->user_id)) {
                     throw new InvalidArgumentException('Поручение не найдено');
                 }
             }
 
             $expense = Expense::create([
-                'user_id' => $user->id,
+                'user_id' => $owner->id,
                 'advance_id' => $advance?->id,
                 'article_id' => $articleId,
                 'supplier_id' => $supplierId,
@@ -65,7 +68,7 @@ class ExpenseService
                 'description' => $data['description'] ?? null,
             ]);
 
-            $this->ledger->apply($user, WalletTransaction::TYPE_EXPENSE, -$amountMinor, [
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, -$amountMinor, [
                 'advance_id' => $advance?->id,
                 'expense_id' => $expense->id,
             ]);
@@ -83,7 +86,7 @@ class ExpenseService
     {
         return DB::transaction(function () use ($user, $expense, $data) {
             $expense = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
-            if ($expense->user_id !== $user->id) {
+            if (! $user->canAccessOwned($expense->user_id)) {
                 throw new InvalidArgumentException('Чужая трата');
             }
 
@@ -114,7 +117,8 @@ class ExpenseService
                     $expense->task_id = null;
                 } else {
                     $taskId = (int) $data['task_id'];
-                    if (! $user->tasks()->whereKey($taskId)->exists()) {
+                    $task = Task::query()->find($taskId);
+                    if (! $task || ! $user->canAccessOwned($task->user_id)) {
                         throw new InvalidArgumentException('Поручение не найдено');
                     }
                     $expense->task_id = $taskId;
@@ -137,7 +141,8 @@ class ExpenseService
                 $expense->save();
 
                 if ($delta !== 0) {
-                    $this->ledger->apply($user, WalletTransaction::TYPE_EXPENSE, $delta, [
+                    $owner = $this->resolveOwner($user, $expense->user_id);
+                    $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, $delta, [
                         'advance_id' => $expense->advance_id,
                         'expense_id' => $expense->id,
                         'meta' => ['reason' => 'expense_update'],
@@ -164,7 +169,7 @@ class ExpenseService
     {
         DB::transaction(function () use ($user, $expense) {
             $expense = Expense::whereKey($expense->id)->lockForUpdate()->with('receipts')->firstOrFail();
-            if ($expense->user_id !== $user->id) {
+            if (! $user->canAccessOwned($expense->user_id)) {
                 throw new InvalidArgumentException('Чужая трата');
             }
 
@@ -173,8 +178,9 @@ class ExpenseService
                 : null;
 
             $amount = (int) $expense->amount_minor;
+            $owner = $this->resolveOwner($user, $expense->user_id);
 
-            $this->ledger->apply($user, WalletTransaction::TYPE_EXPENSE, $amount, [
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, $amount, [
                 'advance_id' => $expense->advance_id,
                 'expense_id' => $expense->id,
                 'meta' => ['reason' => 'expense_delete'],
@@ -216,16 +222,27 @@ class ExpenseService
         $receipt->delete();
     }
 
+    protected function resolveOwner(User $actor, ?int $ownerId): User
+    {
+        if ($ownerId === null || (int) $ownerId === (int) $actor->id) {
+            return $actor;
+        }
+
+        return User::query()->findOrFail($ownerId);
+    }
+
     protected function resolveSupplier(User $user, mixed $supplierId): int
     {
         if ($supplierId === null || $supplierId === '') {
             throw new InvalidArgumentException('Укажите поставщика');
         }
 
-        $supplier = Supplier::query()
-            ->where('user_id', $user->id)
-            ->whereKey((int) $supplierId)
-            ->first();
+        $query = Supplier::query()->whereKey((int) $supplierId);
+        if (! $user->is_admin) {
+            $query->where('user_id', $user->id);
+        }
+
+        $supplier = $query->first();
 
         if (! $supplier) {
             throw new InvalidArgumentException('Поставщик не найден');

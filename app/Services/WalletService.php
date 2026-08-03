@@ -46,7 +46,7 @@ class WalletService
             $tx = WalletTransaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
             $wallet = Wallet::whereKey($tx->wallet_id)->lockForUpdate()->firstOrFail();
 
-            if ($wallet->user_id !== $user->id) {
+            if (! $user->canAccessOwned($wallet->user_id)) {
                 throw new InvalidArgumentException('Чужая операция');
             }
             if ($tx->type !== WalletTransaction::TYPE_TOPUP) {

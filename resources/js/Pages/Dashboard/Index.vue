@@ -3,13 +3,16 @@ import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { useDisplay } from 'vuetify';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import OwnerBadge from '@/Components/OwnerBadge.vue';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
+import { useIsAdmin } from '@/composables/useIsAdmin';
 import { dictChipStyle } from '@/utils/dictColor';
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
 const { openTask, openEvent, openAdvance } = useWorkspaceUi();
+const { isAdmin } = useIsAdmin();
 
 const localDateKey = (offsetDays = 0) => {
     const d = new Date();
@@ -71,6 +74,7 @@ const mapAgendaItem = (e) => ({
     id: e.id,
     time: e.allDay ? 'день' : String(e.start).slice(11, 16),
     title: e.title,
+    user: e.user,
     desc: `${e.place || 'Без места'} · ${store.tasksForEvent(e.id).length} поруч.`,
     dot: store.getEventType(e.type_id)?.color || '#6957EE',
 });
@@ -198,6 +202,7 @@ const financePreview = computed(() => {
                                         :style="{ background: item.dot }"
                                     />
                                     <span class="text-truncate">{{ item.title }}</span>
+                                    <OwnerBadge :show="isAdmin" :user="item.user" />
                                 </div>
                                 <div class="text-caption text-medium-emphasis mt-1">{{ item.desc }}</div>
                             </div>
@@ -225,6 +230,7 @@ const financePreview = computed(() => {
                                         :style="{ background: item.dot }"
                                     />
                                     <span class="text-truncate">{{ item.title }}</span>
+                                    <OwnerBadge :show="isAdmin" :user="item.user" />
                                 </div>
                                 <div class="text-caption text-medium-emphasis mt-1">{{ item.desc }}</div>
                             </div>
@@ -265,7 +271,10 @@ const financePreview = computed(() => {
                                 />
                             </div>
                             <div class="flex-grow-1 min-w-0 overflow-hidden">
-                                <div class="text-body-2 font-weight-bold skydesk-task-title">{{ task.title }}</div>
+                                <div class="d-flex align-center ga-2 mb-1">
+                                    <div class="text-body-2 font-weight-bold skydesk-task-title flex-grow-1">{{ task.title }}</div>
+                                    <OwnerBadge :show="isAdmin" :user="task.user" />
+                                </div>
                                 <div class="text-caption text-medium-emphasis text-truncate">
                                     {{ task.reasons.join(' · ') }}
                                 </div>

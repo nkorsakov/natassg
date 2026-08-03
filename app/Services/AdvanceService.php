@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Advance;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Support\DictionaryResolver;
@@ -337,7 +338,10 @@ class AdvanceService
             return [];
         }
 
-        $owned = $user->tasks()->whereIn('id', $ids)->pluck('id')->all();
+        $owned = ($user->is_admin
+            ? Task::query()
+            : $user->tasks()
+        )->whereIn('id', $ids)->pluck('id')->all();
         if (count($owned) !== $ids->count()) {
             throw new InvalidArgumentException('Поручение не найдено');
         }

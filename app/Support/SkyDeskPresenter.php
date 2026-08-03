@@ -64,26 +64,53 @@ class SkyDeskPresenter
 
     public static function workspace(User $user): array
     {
-        $tasks = $user->tasks()
-            ->with(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders' => fn ($q) => $q->pending()->orderBy('remind_at')])
-            ->orderByDesc('id')
-            ->get();
+        $isAdmin = (bool) $user->is_admin;
 
-        $events = $user->events()
-            ->with(['type', 'tasks'])
-            ->orderBy('starts_at')
-            ->get();
+        $taskQuery = Task::query()
+            ->with([
+                'user',
+                'status',
+                'priority',
+                'type',
+                'events',
+                'attachments',
+                'advances',
+                'children',
+                'reminders' => fn ($q) => $q->pending()->orderBy('remind_at'),
+            ])
+            ->orderByDesc('id');
 
-        $advances = $user->advances()
-            ->with(['status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier'])
-            ->orderByDesc('id')
-            ->get();
+        $eventQuery = CalendarEvent::query()
+            ->with(['user', 'type', 'tasks'])
+            ->orderBy('starts_at');
 
-        $expenses = Expense::query()
-            ->where('user_id', $user->id)
-            ->with(['receipts', 'article', 'supplier'])
-            ->orderByDesc('id')
-            ->get();
+        $advanceQuery = Advance::query()
+            ->with([
+                'user',
+                'status',
+                'disbursementMethod',
+                'tasks',
+                'expenses.receipts',
+                'expenses.article',
+                'expenses.supplier',
+            ])
+            ->orderByDesc('id');
+
+        $expenseQuery = Expense::query()
+            ->with(['user', 'receipts', 'article', 'supplier'])
+            ->orderByDesc('id');
+
+        if (! $isAdmin) {
+            $taskQuery->where('user_id', $user->id);
+            $eventQuery->where('user_id', $user->id);
+            $advanceQuery->where('user_id', $user->id);
+            $expenseQuery->where('user_id', $user->id);
+        }
+
+        $tasks = $taskQuery->get();
+        $events = $eventQuery->get();
+        $advances = $advanceQuery->get();
+        $expenses = $expenseQuery->get();
 
         $contacts = $user->contacts()->orderBy('name')->get();
         $suppliers = $user->suppliers()->with('contact')->orderBy('name')->get();
@@ -98,6 +125,9 @@ class SkyDeskPresenter
         }
 
         $presentedAdvances = $advances->map(fn (Advance $a) => self::advance($a))->values();
+        $walletAdvances = $isAdmin
+            ? $presentedAdvances->filter(fn (array $a) => (int) ($a['user_id'] ?? 0) === (int) $user->id)->values()
+            : $presentedAdvances;
 
         return [
             'profile' => [
@@ -111,7 +141,7 @@ class SkyDeskPresenter
             'advances' => $presentedAdvances,
             'contacts' => $contacts->map(fn (Contact $c) => self::contact($c))->values(),
             'suppliers' => $suppliers->map(fn (Supplier $s) => self::supplier($s))->values(),
-            'wallet' => self::wallet($wallet, $presentedAdvances),
+            'wallet' => self::wallet($wallet, $walletAdvances),
             'expenses' => $expenses->map(fn (Expense $e) => self::expense($e))->values(),
             'receipts' => $expenses->flatMap(
                 fn (Expense $e) => $e->receipts->map(fn ($r) => self::receipt($r, $e->id))
@@ -119,9 +149,22 @@ class SkyDeskPresenter
         ];
     }
 
+    public static function owner(?User $user): ?array
+    {
+        if (! $user) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'initials' => $user->initials ?: mb_strtoupper(mb_substr($user->name, 0, 2)),
+        ];
+    }
+
     public static function task(Task $task): array
     {
-        $task->loadMissing(['status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders']);
+        $task->loadMissing(['user', 'status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders']);
 
         $pendingReminders = $task->reminders
             ->filter(fn ($r) => $r->sent_at === null && $r->cancelled_at === null)
@@ -130,6 +173,8 @@ class SkyDeskPresenter
 
         return [
             'id' => $task->id,
+            'user_id' => $task->user_id,
+            'user' => self::owner($task->user),
             'parent_id' => $task->parent_id,
             'title' => $task->title,
             'note' => $task->note ?? '',
@@ -166,10 +211,12 @@ class SkyDeskPresenter
 
     public static function event(CalendarEvent $event): array
     {
-        $event->loadMissing(['type', 'tasks']);
+        $event->loadMissing(['user', 'type', 'tasks']);
 
         return [
             'id' => $event->id,
+            'user_id' => $event->user_id,
+            'user' => self::owner($event->user),
             'title' => $event->title,
             'type_id' => $event->type?->slug,
             'start' => optional($event->starts_at)?->format('Y-m-d\TH:i'),
@@ -183,12 +230,14 @@ class SkyDeskPresenter
 
     public static function advance(Advance $advance): array
     {
-        $advance->loadMissing(['status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
+        $advance->loadMissing(['user', 'status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
         $spent = (int) $advance->expenses->sum('amount_minor');
         $amount = DictionaryResolver::minorToRubles((int) $advance->amount_minor);
 
         return [
             'id' => $advance->id,
+            'user_id' => $advance->user_id,
+            'user' => self::owner($advance->user),
             'title' => $advance->title,
             'task_id' => $advance->tasks->first()?->id,
             'task_ids' => $advance->tasks->pluck('id')->values(),
