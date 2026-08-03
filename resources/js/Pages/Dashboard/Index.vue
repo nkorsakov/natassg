@@ -60,7 +60,7 @@ const stats = computed(() => [
     },
     {
         value: String(
-            store.advances.value.filter((a) => ['issued', 'reporting'].includes(a.status_id)).length,
+            store.advances.value.filter((a) => ['received', 'reporting'].includes(a.status_id)).length,
         ),
         label: 'авансов на отчёте',
         icon: 'mdi-receipt-text-outline',

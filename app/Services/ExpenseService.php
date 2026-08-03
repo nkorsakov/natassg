@@ -18,8 +18,14 @@ use InvalidArgumentException;
 
 class ExpenseService
 {
+    public const ACCOUNTS = [
+        WalletTransaction::ACCOUNT_WALLET,
+        WalletTransaction::ACCOUNT_ADVANCE,
+        WalletTransaction::ACCOUNT_UNASSIGNED,
+    ];
+
     public function __construct(
-        protected WalletLedger $ledger,
+        protected FinanceLedger $ledger,
         protected AdvanceService $advances,
     ) {}
 
@@ -30,6 +36,9 @@ class ExpenseService
                 $advance = Advance::whereKey($advance->id)->lockForUpdate()->with('status')->firstOrFail();
                 if (! $user->canAccessOwned($advance->user_id)) {
                     throw new InvalidArgumentException('Чужой аванс');
+                }
+                if (! in_array($advance->status?->slug, ['received', 'reporting'], true)) {
+                    throw new InvalidArgumentException('Траты к авансу — только после получения денег');
                 }
             }
 
@@ -58,9 +67,24 @@ class ExpenseService
                 }
             }
 
+            $debitAccount = $this->normalizeAccount(
+                $data['debit_account'] ?? ($advance ? WalletTransaction::ACCOUNT_ADVANCE : WalletTransaction::ACCOUNT_UNASSIGNED)
+            );
+
+            if ($advance && $debitAccount === WalletTransaction::ACCOUNT_ADVANCE) {
+                // ok
+            } elseif ($advance && $debitAccount === WalletTransaction::ACCOUNT_WALLET) {
+                // linked but paid from wallet
+            } elseif ($advance && $debitAccount === WalletTransaction::ACCOUNT_UNASSIGNED) {
+                throw new InvalidArgumentException('К авансу нельзя привязать неразнесённый счёт');
+            } elseif (! $advance && $debitAccount === WalletTransaction::ACCOUNT_ADVANCE) {
+                throw new InvalidArgumentException('Для списания с аванса укажите аванс');
+            }
+
             $expense = Expense::create([
                 'user_id' => $owner->id,
                 'advance_id' => $advance?->id,
+                'debit_account' => $debitAccount,
                 'article_id' => $articleId,
                 'supplier_id' => $supplierId,
                 'task_id' => $taskId,
@@ -68,10 +92,14 @@ class ExpenseService
                 'description' => $data['description'] ?? null,
             ]);
 
-            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, -$amountMinor, [
-                'advance_id' => $advance?->id,
-                'expense_id' => $expense->id,
-            ]);
+            $this->postExpenseDebits($owner, $expense, $advance, $amountMinor, $debitAccount);
+
+            $receiptFiles = $data['receipt_files'] ?? [];
+            foreach ($receiptFiles as $file) {
+                if ($file instanceof UploadedFile) {
+                    $this->addReceipt($expense, $file);
+                }
+            }
 
             if ($advance) {
                 $this->advances->markReportingIfNeeded($advance);
@@ -94,7 +122,12 @@ class ExpenseService
                 ? Advance::whereKey($expense->advance_id)->lockForUpdate()->with('status')->first()
                 : null;
 
+            if ($advance?->status?->slug === 'closed') {
+                throw new InvalidArgumentException('Нельзя менять трату закрытого аванса');
+            }
+
             $oldAmount = (int) $expense->amount_minor;
+            $oldAccount = $expense->debit_account;
 
             if (array_key_exists('article_id', $data)) {
                 $articleId = DictionaryResolver::expenseArticleId($data['article_id']);
@@ -125,41 +158,129 @@ class ExpenseService
                 }
             }
 
+            $newAccount = array_key_exists('debit_account', $data)
+                ? $this->normalizeAccount($data['debit_account'])
+                : $oldAccount;
+
             $newAmount = null;
             if (array_key_exists('amount_minor', $data)) {
                 $newAmount = (int) $data['amount_minor'];
             } elseif (array_key_exists('amount', $data)) {
                 $newAmount = DictionaryResolver::rublesToMinor($data['amount']);
             }
+            $newAmount ??= $oldAmount;
 
-            if ($newAmount !== null) {
-                if ($newAmount <= 0) {
-                    throw new InvalidArgumentException('Сумма траты должна быть больше нуля');
-                }
-                $delta = $oldAmount - $newAmount; // positive => money back to wallet
+            if ($newAmount <= 0) {
+                throw new InvalidArgumentException('Сумма траты должна быть больше нуля');
+            }
+
+            if ($newAccount === WalletTransaction::ACCOUNT_ADVANCE && ! $advance) {
+                throw new InvalidArgumentException('Для списания с аванса укажите аванс');
+            }
+
+            $owner = $this->resolveOwner($user, $expense->user_id);
+
+            if ($newAmount !== $oldAmount || $newAccount !== $oldAccount) {
+                $this->reverseExpenseDebits($owner, $expense);
                 $expense->amount_minor = $newAmount;
+                $expense->debit_account = $newAccount;
                 $expense->save();
-
-                if ($delta !== 0) {
-                    $owner = $this->resolveOwner($user, $expense->user_id);
-                    $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, $delta, [
-                        'advance_id' => $expense->advance_id,
-                        'expense_id' => $expense->id,
-                        'meta' => ['reason' => 'expense_update'],
-                    ]);
-                }
+                $this->postExpenseDebits($owner, $expense, $advance, $newAmount, $newAccount);
             } else {
                 $expense->save();
             }
 
             if ($advance) {
-                if (in_array($advance->status?->slug, ['closed'], true) && $this->advances->remainingMinor($advance) !== 0) {
-                    $advance->status_id = DictionaryResolver::advanceStatusId('reporting');
-                    $advance->closed_at = null;
-                    $advance->save();
-                }
+                $this->advances->markReportingIfNeeded($advance);
                 $this->advances->maybeAutoClose($advance->fresh('status'));
             }
+
+            return $expense->fresh(['receipts', 'article', 'supplier']);
+        });
+    }
+
+    public function reclassify(User $user, Expense $expense, string $debitAccount, ?Advance $advance = null): Expense
+    {
+        $data = ['debit_account' => $debitAccount];
+        if ($advance) {
+            return DB::transaction(function () use ($user, $expense, $debitAccount, $advance) {
+                $expense = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
+                if ($expense->advance_id && (int) $expense->advance_id !== (int) $advance->id) {
+                    throw new InvalidArgumentException('Трата привязана к другому авансу');
+                }
+                $expense->advance_id = $advance->id;
+                $expense->save();
+
+                return $this->updateExpense($user, $expense, ['debit_account' => $debitAccount]);
+            });
+        }
+
+        return $this->updateExpense($user, $expense, $data);
+    }
+
+    public function attachToAdvance(Advance $advance, Expense $expense, ?string $debitAccount = null): Expense
+    {
+        return DB::transaction(function () use ($advance, $expense, $debitAccount) {
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['status', 'user'])->firstOrFail();
+            $expense = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
+
+            if ($advance->status?->slug === 'closed') {
+                throw new InvalidArgumentException('К закрытому авансу нельзя прикреплять');
+            }
+            if (! in_array($advance->status?->slug, ['received', 'reporting'], true)) {
+                throw new InvalidArgumentException('Сначала отметьте получение денег');
+            }
+            if ($expense->advance_id && (int) $expense->advance_id !== (int) $advance->id) {
+                throw new InvalidArgumentException('Трата уже привязана к другому авансу');
+            }
+
+            $targetAccount = $debitAccount
+                ? $this->normalizeAccount($debitAccount)
+                : ($expense->debit_account === WalletTransaction::ACCOUNT_UNASSIGNED
+                    ? WalletTransaction::ACCOUNT_ADVANCE
+                    : $expense->debit_account);
+
+            if ($targetAccount === WalletTransaction::ACCOUNT_UNASSIGNED) {
+                throw new InvalidArgumentException('Укажите счёт списания: кошелёк или аванс');
+            }
+
+            $expense->advance_id = $advance->id;
+            $expense->save();
+
+            $owner = $advance->user;
+            $this->reverseExpenseDebits($owner, $expense);
+            $expense->debit_account = $targetAccount;
+            $expense->save();
+            $this->postExpenseDebits($owner, $expense, $advance, (int) $expense->amount_minor, $targetAccount);
+
+            $this->advances->markReportingIfNeeded($advance);
+            $this->advances->maybeAutoClose($advance);
+
+            return $expense->fresh(['receipts', 'article', 'supplier']);
+        });
+    }
+
+    public function detachFromAdvance(Advance $advance, Expense $expense): Expense
+    {
+        return DB::transaction(function () use ($advance, $expense) {
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['status', 'user'])->firstOrFail();
+            $expense = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
+
+            if ($advance->status?->slug === 'closed') {
+                throw new InvalidArgumentException('От закрытого аванса открепить нельзя');
+            }
+            if ((int) $expense->advance_id !== (int) $advance->id) {
+                throw new InvalidArgumentException('Трата не привязана к этому авансу');
+            }
+
+            $owner = $advance->user;
+            $this->reverseExpenseDebits($owner, $expense);
+
+            $expense->advance_id = null;
+            $expense->debit_account = WalletTransaction::ACCOUNT_UNASSIGNED;
+            $expense->save();
+
+            $this->postExpenseDebits($owner, $expense, null, (int) $expense->amount_minor, WalletTransaction::ACCOUNT_UNASSIGNED);
 
             return $expense->fresh(['receipts', 'article', 'supplier']);
         });
@@ -177,14 +298,12 @@ class ExpenseService
                 ? Advance::whereKey($expense->advance_id)->lockForUpdate()->with('status')->first()
                 : null;
 
-            $amount = (int) $expense->amount_minor;
-            $owner = $this->resolveOwner($user, $expense->user_id);
+            if ($advance?->status?->slug === 'closed') {
+                throw new InvalidArgumentException('Нельзя удалить трату закрытого аванса');
+            }
 
-            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, $amount, [
-                'advance_id' => $expense->advance_id,
-                'expense_id' => $expense->id,
-                'meta' => ['reason' => 'expense_delete'],
-            ]);
+            $owner = $this->resolveOwner($user, $expense->user_id);
+            $this->reverseExpenseDebits($owner, $expense);
 
             foreach ($expense->receipts as $receipt) {
                 Storage::disk('public')->delete($receipt->path);
@@ -192,12 +311,6 @@ class ExpenseService
             }
 
             $expense->delete();
-
-            if ($advance && $advance->status?->slug === 'closed') {
-                $advance->status_id = DictionaryResolver::advanceStatusId('reporting');
-                $advance->closed_at = null;
-                $advance->save();
-            }
         });
     }
 
@@ -222,6 +335,84 @@ class ExpenseService
         $receipt->delete();
     }
 
+    protected function postExpenseDebits(
+        User $owner,
+        Expense $expense,
+        ?Advance $advance,
+        int $amountMinor,
+        string $debitAccount,
+    ): void {
+        if ($debitAccount === WalletTransaction::ACCOUNT_UNASSIGNED) {
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_UNASSIGNED, -$amountMinor, [
+                'advance_id' => null,
+                'expense_id' => $expense->id,
+            ]);
+
+            return;
+        }
+
+        if ($debitAccount === WalletTransaction::ACCOUNT_WALLET) {
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_WALLET, -$amountMinor, [
+                'advance_id' => $advance?->id,
+                'expense_id' => $expense->id,
+            ]);
+
+            return;
+        }
+
+        // advance account — with overspend tail from wallet
+        $rem = $advance ? max(0, $this->ledger->advanceBalanceMinor($advance->id)) : 0;
+        $fromAdvance = min($amountMinor, $rem);
+        $fromWallet = $amountMinor - $fromAdvance;
+
+        if ($fromAdvance > 0) {
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_ADVANCE, -$fromAdvance, [
+                'advance_id' => $advance?->id,
+                'expense_id' => $expense->id,
+            ]);
+        }
+        if ($fromWallet > 0) {
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_WALLET, -$fromWallet, [
+                'advance_id' => $advance?->id,
+                'expense_id' => $expense->id,
+                'meta' => ['kind' => 'advance_overspend'],
+            ]);
+        }
+    }
+
+    protected function reverseExpenseDebits(User $owner, Expense $expense): void
+    {
+        $nets = WalletTransaction::query()
+            ->where('expense_id', $expense->id)
+            ->where('type', WalletTransaction::TYPE_EXPENSE)
+            ->selectRaw('account, advance_id, sum(amount_minor) as total')
+            ->groupBy('account', 'advance_id')
+            ->get();
+
+        foreach ($nets as $row) {
+            $total = (int) $row->total;
+            if ($total === 0) {
+                continue;
+            }
+
+            $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, $row->account, -$total, [
+                'advance_id' => $row->advance_id,
+                'expense_id' => $expense->id,
+                'meta' => ['reason' => 'expense_reverse'],
+            ]);
+        }
+    }
+
+    protected function normalizeAccount(?string $account): string
+    {
+        $account = $account ?: WalletTransaction::ACCOUNT_UNASSIGNED;
+        if (! in_array($account, self::ACCOUNTS, true)) {
+            throw new InvalidArgumentException('Неизвестный счёт списания');
+        }
+
+        return $account;
+    }
+
     protected function resolveOwner(User $actor, ?int $ownerId): User
     {
         if ($ownerId === null || (int) $ownerId === (int) $actor->id) {
@@ -231,10 +422,10 @@ class ExpenseService
         return User::query()->findOrFail($ownerId);
     }
 
-    protected function resolveSupplier(User $user, mixed $supplierId): int
+    protected function resolveSupplier(User $user, mixed $supplierId): ?int
     {
         if ($supplierId === null || $supplierId === '') {
-            throw new InvalidArgumentException('Укажите поставщика');
+            return null;
         }
 
         $query = Supplier::query()->whereKey((int) $supplierId);

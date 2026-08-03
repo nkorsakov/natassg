@@ -159,6 +159,7 @@ class DemoData
         foreach (Wallet::query()->cursor() as $wallet) {
             $sum = (int) WalletTransaction::query()
                 ->where('wallet_id', $wallet->id)
+                ->where('account', WalletTransaction::ACCOUNT_WALLET)
                 ->sum('amount_minor');
             $wallet->balance_minor = $sum;
             $wallet->save();

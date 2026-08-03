@@ -25,7 +25,16 @@ function emptyWorkspace() {
         receipts: [],
         contacts: [],
         suppliers: [],
-        wallet: { balance: 0, free: 0, in_advances: 0, currency: 'RUB', transactions: [] },
+        wallet: {
+            balance: 0,
+            on_hand: 0,
+            wallet: 0,
+            free: 0,
+            in_advances: 0,
+            unassigned: 0,
+            currency: 'RUB',
+            transactions: [],
+        },
     };
 }
 
@@ -35,10 +44,11 @@ function dictById(list, id) {
 
 let updateTimers = {};
 
-function debouncedPut(key, url, data, delay = 350) {
+function debouncedPut(key, url, data, delay = 900) {
     clearTimeout(updateTimers[key]);
     updateTimers[key] = setTimeout(() => {
         router.put(url, data, visitOpts);
+        delete updateTimers[key];
     }, delay);
 }
 
@@ -82,7 +92,7 @@ export function useSkyDeskStore() {
     const contactCount = computed(() => contacts.value.length);
 
     const financeAttentionCount = computed(
-        () => advances.value.filter((a) => ['pending', 'issued', 'reporting'].includes(a.status_id)).length,
+        () => advances.value.filter((a) => ['pending', 'received', 'reporting'].includes(a.status_id)).length,
     );
 
     const formatMoney = (n) => `${Number(n || 0).toLocaleString('ru-RU')} ₽`;
@@ -186,7 +196,13 @@ export function useSkyDeskStore() {
     const removeDictItem = (key, id) => {
         const list = dictionaries.value[key];
         if (!list || list.length <= 1) return false;
-        router.delete(`/settings/dictionaries/${key}/${id}`, visitOpts);
+        router.delete(`/settings/dictionaries/${key}/${id}`, {
+            ...visitOpts,
+            onError: (errors) => {
+                const msg = errors?.dict;
+                if (msg) window.alert(Array.isArray(msg) ? msg[0] : msg);
+            },
+        });
         return true;
     };
 
@@ -291,13 +307,22 @@ export function useSkyDeskStore() {
             amount: Number(payload.amount) || 0,
             description: payload.description || '',
             article_id: payload.article_id,
-            supplier_id: payload.supplier_id,
+            supplier_id: payload.supplier_id || null,
             task_id: payload.task_id ?? null,
+            debit_account: payload.debit_account || (advanceId ? 'advance' : 'unassigned'),
         };
+        const receipts = Array.isArray(payload.receipts) ? payload.receipts.filter(Boolean) : [];
+        const opts = receipts.length ? { ...visitOpts, forceFormData: true } : visitOpts;
+        if (receipts.length) {
+            body.receipts = receipts;
+        }
         if (advanceId) {
-            router.post(`/advances/${advanceId}/expenses`, body, visitOpts);
+            router.post(`/advances/${advanceId}/expenses`, body, opts);
         } else {
-            router.post('/expenses', body, visitOpts);
+            router.post('/expenses', {
+                ...body,
+                advance_id: payload.advance_id || null,
+            }, opts);
         }
         return null;
     };
@@ -345,16 +370,22 @@ export function useSkyDeskStore() {
         }, visitOpts);
     };
 
-    const releaseRemainderToFree = (advanceId) => {
-        router.post(`/advances/${advanceId}/release`, {}, visitOpts);
+    const closeAdvanceToWallet = (advanceId) => {
+        router.post(`/advances/${advanceId}/close-to-wallet`, {}, visitOpts);
     };
 
-    const returnRemainderToBoss = (advanceId) => {
-        router.post(`/advances/${advanceId}/return`, {}, visitOpts);
+    const closeAdvanceWriteOff = (advanceId) => {
+        router.post(`/advances/${advanceId}/close-writeoff`, {}, visitOpts);
     };
 
-    const writeOffUnknown = (advanceId) => {
-        router.post(`/advances/${advanceId}/writeoff`, {}, visitOpts);
+    const attachExpenseToAdvance = (advanceId, expenseId, debitAccount = 'advance') => {
+        router.post(`/advances/${advanceId}/expenses/${expenseId}/attach`, {
+            debit_account: debitAccount,
+        }, visitOpts);
+    };
+
+    const detachExpenseFromAdvance = (advanceId, expenseId) => {
+        router.post(`/advances/${advanceId}/expenses/${expenseId}/detach`, {}, visitOpts);
     };
 
     const createSupplier = (payload = {}) =>
@@ -496,9 +527,10 @@ export function useSkyDeskStore() {
         removeReceipt,
         topUpWallet,
         updateTopUp,
-        releaseRemainderToFree,
-        returnRemainderToBoss,
-        writeOffUnknown,
+        closeAdvanceToWallet,
+        closeAdvanceWriteOff,
+        attachExpenseToAdvance,
+        detachExpenseFromAdvance,
         createSupplier,
         updateSupplier,
         removeSupplier,

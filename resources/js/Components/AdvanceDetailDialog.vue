@@ -59,7 +59,11 @@ const expenseDraft = reactive({
     description: '',
     article_id: null,
     supplier_id: null,
+    receipts: [],
 });
+
+const draftReceiptInput = ref(null);
+const uploadingDraftReceipt = ref(false);
 
 const isDraftTitle = (title) => {
     const t = String(title || '').trim();
@@ -68,12 +72,28 @@ const isDraftTitle = (title) => {
 
 const spent = computed(() => store.advanceSpent(props.advanceId));
 const remaining = computed(() => store.advanceRemaining(props.advanceId));
-const canSettle = computed(() =>
-    ['issued', 'reporting'].includes(advance.value?.status_id) && remaining.value > 0,
+const canClose = computed(() =>
+    ['received', 'reporting'].includes(advance.value?.status_id) && remaining.value > 0,
 );
 
+const canEditMoney = computed(() =>
+    ['received', 'reporting'].includes(advance.value?.status_id),
+);
+
+const unassignedExpenses = computed(() =>
+    store.expenses.value.filter((e) => !e.advance_id && e.debit_account === 'unassigned'),
+);
+
+const isClosed = computed(() => advance.value?.status_id === 'closed');
+
+const accountLabel = (account) => ({
+    wallet: 'кошелёк',
+    advance: 'аванс',
+    unassigned: 'не разнесено',
+}[account] || account);
+
 watch(
-    () => [model.value, props.advanceId, advance.value],
+    () => [model.value, props.advanceId],
     async () => {
         if (!model.value || !advance.value) return;
         skipWatch.value = true;
@@ -89,6 +109,7 @@ watch(
         expenseDraft.description = '';
         expenseDraft.article_id = articleItems.value[0]?.id || null;
         expenseDraft.supplier_id = null;
+        expenseDraft.receipts = [];
         await nextTick();
         skipWatch.value = false;
         if (draftTitle || draftAmount) {
@@ -104,9 +125,9 @@ watch(
     () => {
         if (skipWatch.value || !model.value || !props.advanceId) return;
 
-        if (form.status_id === 'issued') {
+        if (form.status_id === 'received') {
             if (!(Number(form.amount) > 0)) {
-                window.alert('Перед выдачей укажите сумму больше нуля.');
+                window.alert('Перед получением укажите сумму больше нуля.');
                 skipWatch.value = true;
                 form.status_id = advance.value?.status_id || 'pending';
                 nextTick(() => { skipWatch.value = false; });
@@ -123,11 +144,11 @@ watch(
 
         if (
             advance.value
-            && ['issued', 'reporting', 'closed'].includes(advance.value.status_id)
+            && ['received', 'reporting', 'closed'].includes(advance.value.status_id)
             && Number(form.amount) !== Number(advance.value.amount)
             && Number(form.amount) > 0
         ) {
-            if (!window.confirm('Сумма уже выдавалась. Изменить с корректировкой кошелька?')) {
+            if (!window.confirm('Сумма уже зачислялась на счёт аванса. Изменить с корректировкой?')) {
                 skipWatch.value = true;
                 form.amount = advance.value.amount;
                 nextTick(() => { skipWatch.value = false; });
@@ -136,12 +157,19 @@ watch(
         }
 
         if (advance.value?.status_id === 'closed' && form.status_id !== 'closed') {
-            if (!window.confirm('Открыть закрытый аванс заново?')) {
-                skipWatch.value = true;
-                form.status_id = 'closed';
-                nextTick(() => { skipWatch.value = false; });
-                return;
-            }
+            window.alert('Закрытый аванс нельзя открыть снова из статуса. Создайте новую заявку.');
+            skipWatch.value = true;
+            form.status_id = 'closed';
+            nextTick(() => { skipWatch.value = false; });
+            return;
+        }
+
+        if (form.status_id === 'closed' && advance.value?.status_id !== 'closed') {
+            window.alert('Закрывайте через «в кошелёк» или «списание без отчёта».');
+            skipWatch.value = true;
+            form.status_id = advance.value?.status_id || 'pending';
+            nextTick(() => { skipWatch.value = false; });
+            return;
         }
 
         store.updateAdvance(props.advanceId, {
@@ -156,20 +184,78 @@ watch(
     { deep: true },
 );
 
-const addExpense = () => {
+const addExpense = async () => {
     const amount = Number(expenseDraft.amount);
-    if (!amount || !expenseDraft.article_id || !expenseDraft.supplier_id) {
-        window.alert('Нужны сумма, статья и поставщик.');
+    if (!amount || !expenseDraft.article_id) {
+        window.alert('Нужны сумма и статья.');
         return;
+    }
+    const receipts = [];
+    for (const raw of expenseDraft.receipts) {
+        const prepared = await prepareUploadFile(raw);
+        receipts.push(prepared.file);
     }
     store.addExpense(props.advanceId, {
         amount,
         description: expenseDraft.description,
         article_id: expenseDraft.article_id,
-        supplier_id: expenseDraft.supplier_id,
+        supplier_id: expenseDraft.supplier_id || null,
+        debit_account: 'advance',
+        receipts,
     });
     expenseDraft.amount = '';
     expenseDraft.description = '';
+    expenseDraft.supplier_id = null;
+    expenseDraft.receipts = [];
+};
+
+const onDraftReceiptsSelected = async (event) => {
+    const files = [...(event.target.files || [])];
+    event.target.value = '';
+    if (!files.length) return;
+    uploadingDraftReceipt.value = true;
+    try {
+        for (const raw of files) {
+            const prepared = await prepareUploadFile(raw);
+            expenseDraft.receipts.push(prepared.file);
+        }
+    } finally {
+        uploadingDraftReceipt.value = false;
+    }
+};
+
+const removeDraftReceipt = (idx) => {
+    expenseDraft.receipts.splice(idx, 1);
+};
+
+const attachExisting = (expense) => {
+    if (isClosed.value) return;
+    let debit = 'advance';
+    if (expense.debit_account && expense.debit_account !== 'advance' && expense.debit_account !== 'unassigned') {
+        if (!window.confirm(`Трата сейчас со счёта «${accountLabel(expense.debit_account)}». Списать с аванса?`)) {
+            if (window.confirm('Оставить списание с кошелька, но привязать к авансу?')) {
+                debit = 'wallet';
+            } else {
+                return;
+            }
+        }
+    } else if (expense.debit_account === 'unassigned') {
+        const useWallet = window.confirm('Списать с аванса?\nОК — с аванса, Отмена — спросить про кошелёк.');
+        if (!useWallet) {
+            if (!window.confirm('Тогда списать с кошелька и привязать к авансу?')) return;
+            debit = 'wallet';
+        }
+    }
+    store.attachExpenseToAdvance(props.advanceId, expense.id, debit);
+};
+
+const detachExpense = (expense) => {
+    if (isClosed.value) {
+        window.alert('От закрытого аванса открепить нельзя.');
+        return;
+    }
+    if (!window.confirm('Открепить трату? Она станет неразнесённой.')) return;
+    store.detachExpenseFromAdvance(props.advanceId, expense.id);
 };
 
 const addReceipt = (expenseId) => {
@@ -328,28 +414,19 @@ const openFirstTask = () => {
                         size="small"
                         variant="tonal"
                         color="success"
-                        :disabled="!canSettle"
-                        @click="store.releaseRemainderToFree(advanceId)"
+                        :disabled="!canClose"
+                        @click="store.closeAdvanceToWallet(advanceId)"
                     >
-                        Остаток → свободно
-                    </v-btn>
-                    <v-btn
-                        size="small"
-                        variant="tonal"
-                        color="primary"
-                        :disabled="!canSettle"
-                        @click="store.returnRemainderToBoss(advanceId)"
-                    >
-                        Вернуть боссу
+                        Остаток → кошелёк
                     </v-btn>
                     <v-btn
                         size="small"
                         variant="tonal"
                         color="warning"
-                        :disabled="!canSettle"
-                        @click="store.writeOffUnknown(advanceId)"
+                        :disabled="!canClose"
+                        @click="store.closeAdvanceWriteOff(advanceId)"
                     >
-                        Списать как неизвестное
+                        Списание без отчёта
                     </v-btn>
                 </div>
 
@@ -369,12 +446,22 @@ const openFirstTask = () => {
                                 {{ store.getExpenseArticle(x.article_id)?.label || '—' }}
                                 ·
                                 {{ store.getSupplier(x.supplier_id)?.name || '—' }}
+                                · {{ accountLabel(x.debit_account) }}
                             </div>
                         </div>
                         <div class="text-right">
                             <b>{{ store.formatMoney(x.amount) }}</b>
-                            <div>
+                            <div class="d-flex justify-end ga-1">
                                 <v-btn
+                                    v-if="!isClosed"
+                                    size="x-small"
+                                    variant="text"
+                                    @click="detachExpense(x)"
+                                >
+                                    Открепить
+                                </v-btn>
+                                <v-btn
+                                    v-if="!isClosed"
                                     size="x-small"
                                     variant="text"
                                     color="error"
@@ -459,7 +546,7 @@ const openFirstTask = () => {
                     </div>
                 </div>
 
-                <v-card variant="outlined" class="pa-4 mt-2">
+                <v-card v-if="canEditMoney" variant="outlined" class="pa-4 mt-2">
                     <div class="text-caption font-weight-bold mb-2">Новая трата</div>
                     <v-row dense>
                         <v-col cols="12" sm="4">
@@ -485,13 +572,62 @@ const openFirstTask = () => {
                                 label="Поставщик"
                                 density="compact"
                                 hide-details
+                                clearable
                             />
                         </v-col>
                         <v-col cols="12">
                             <v-text-field v-model="expenseDraft.description" label="Описание" density="compact" hide-details />
                         </v-col>
                     </v-row>
+                    <div class="d-flex flex-wrap align-center ga-2 mt-3">
+                        <v-btn
+                            size="small"
+                            variant="tonal"
+                            prepend-icon="mdi-paperclip"
+                            :loading="uploadingDraftReceipt"
+                            @click="draftReceiptInput?.click()"
+                        >
+                            Файл / фото
+                        </v-btn>
+                        <v-chip
+                            v-for="(f, idx) in expenseDraft.receipts"
+                            :key="`${f.name}-${idx}`"
+                            size="small"
+                            closable
+                            @click:close="removeDraftReceipt(idx)"
+                        >
+                            {{ f.name || 'файл' }}
+                        </v-chip>
+                    </div>
                     <v-btn class="mt-3" color="primary" size="small" @click="addExpense">Добавить трату</v-btn>
+                    <input
+                        ref="draftReceiptInput"
+                        type="file"
+                        class="d-none"
+                        multiple
+                        accept="image/*,.pdf"
+                        @change="onDraftReceiptsSelected"
+                    />
+                </v-card>
+
+                <v-card
+                    v-if="canEditMoney && unassignedExpenses.length"
+                    variant="outlined"
+                    class="pa-4 mt-3"
+                >
+                    <div class="text-caption font-weight-bold mb-2">Прикрепить неразнесённую</div>
+                    <div
+                        v-for="x in unassignedExpenses"
+                        :key="`u-${x.id}`"
+                        class="d-flex justify-space-between align-center py-2"
+                        style="border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                    >
+                        <div class="min-w-0 pe-2">
+                            <div class="text-body-2 font-weight-bold text-truncate">{{ x.description || 'Трата' }}</div>
+                            <div class="text-caption text-medium-emphasis">{{ store.formatMoney(x.amount) }}</div>
+                        </div>
+                        <v-btn size="x-small" variant="tonal" @click="attachExisting(x)">Прикрепить</v-btn>
+                    </div>
                 </v-card>
 
                 <v-btn

@@ -12,7 +12,7 @@ use InvalidArgumentException;
 
 class WalletService
 {
-    public function __construct(protected WalletLedger $ledger) {}
+    public function __construct(protected FinanceLedger $ledger) {}
 
     public function topUp(User $user, array $data): WalletTransaction
     {
@@ -21,7 +21,7 @@ class WalletService
             : DictionaryResolver::rublesToMinor($data['amount'] ?? 0);
 
         if ($amountMinor <= 0) {
-            throw new InvalidArgumentException('Сумма пополнения должна быть больше нуля');
+            throw new InvalidArgumentException('Сумма прихода должна быть больше нуля');
         }
 
         $methodId = DictionaryResolver::disbursementMethodId($data['disbursement_method_id'] ?? null);
@@ -31,13 +31,20 @@ class WalletService
 
         $method = DisbursementMethod::query()->find($methodId);
 
-        return $this->ledger->apply($user, WalletTransaction::TYPE_TOPUP, $amountMinor, [
-            'meta' => [
-                'note' => $data['note'] ?? null,
-                'disbursement_method_id' => $method?->slug,
-                'title' => $data['title'] ?? null,
-            ],
-        ]);
+        return $this->ledger->apply(
+            $user,
+            WalletTransaction::TYPE_INCOME,
+            WalletTransaction::ACCOUNT_WALLET,
+            $amountMinor,
+            [
+                'meta' => [
+                    'note' => $data['note'] ?? null,
+                    'disbursement_method_id' => $method?->slug,
+                    'title' => $data['title'] ?? null,
+                    'kind' => 'wallet_income',
+                ],
+            ]
+        );
     }
 
     public function updateTopUp(User $user, WalletTransaction $tx, array $data): WalletTransaction
@@ -49,8 +56,8 @@ class WalletService
             if (! $user->canAccessOwned($wallet->user_id)) {
                 throw new InvalidArgumentException('Чужая операция');
             }
-            if ($tx->type !== WalletTransaction::TYPE_TOPUP) {
-                throw new InvalidArgumentException('Можно править только пополнение');
+            if ($tx->type !== WalletTransaction::TYPE_INCOME || $tx->account !== WalletTransaction::ACCOUNT_WALLET) {
+                throw new InvalidArgumentException('Можно править только приход на кошелёк');
             }
 
             $newAmount = array_key_exists('amount_minor', $data)
@@ -60,7 +67,7 @@ class WalletService
                     : (int) $tx->amount_minor);
 
             if ($newAmount <= 0) {
-                throw new InvalidArgumentException('Сумма пополнения должна быть больше нуля');
+                throw new InvalidArgumentException('Сумма прихода должна быть больше нуля');
             }
 
             $meta = is_array($tx->meta) ? $tx->meta : [];
@@ -80,6 +87,7 @@ class WalletService
             if (empty($meta['disbursement_method_id'])) {
                 throw new InvalidArgumentException('Укажите способ получения денег');
             }
+            $meta['kind'] = $meta['kind'] ?? 'wallet_income';
 
             $delta = $newAmount - (int) $tx->amount_minor;
             $tx->amount_minor = $newAmount;

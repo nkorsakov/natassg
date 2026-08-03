@@ -7,23 +7,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WalletTransaction extends Model
 {
-    public const TYPE_TOPUP = 'topup';
-
-    public const TYPE_ISSUE = 'issue';
+    public const TYPE_INCOME = 'income';
 
     public const TYPE_EXPENSE = 'expense';
 
-    public const TYPE_RETURN = 'return';
+    public const TYPE_TRANSFER = 'transfer';
 
-    public const TYPE_WRITEOFF = 'writeoff';
+    public const ACCOUNT_WALLET = 'wallet';
 
-    public const TYPE_AMOUNT_ADJUST = 'amount_adjust';
+    public const ACCOUNT_ADVANCE = 'advance';
 
-    public const TYPE_RELEASE = 'release';
+    public const ACCOUNT_UNASSIGNED = 'unassigned';
 
     protected $fillable = [
         'wallet_id',
         'type',
+        'account',
         'amount_minor',
         'advance_id',
         'expense_id',

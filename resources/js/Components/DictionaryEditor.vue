@@ -81,8 +81,20 @@ const save = () => {
     editing.value = null;
 };
 
-const remove = (id) => {
-    store.removeDictItem(props.dictKey, id);
+const remove = (item) => {
+    if (items.value.length <= 1) {
+        window.alert('В справочнике должен остаться хотя бы один элемент.');
+        return;
+    }
+    const name = item.label || 'элемент';
+    let message = `Удалить «${name}» из справочника?`;
+    if (item.is_system) {
+        message += '\n\nЭто системный пункт. Если он уже используется в поручениях, событиях или финансах — удаление не пройдёт, пока записи не перенесёте на другой.';
+    } else {
+        message += '\n\nЕсли пункт уже используется в данных, удаление будет отклонено.';
+    }
+    if (!window.confirm(message)) return;
+    store.removeDictItem(props.dictKey, item.id);
 };
 </script>
 
@@ -129,7 +141,15 @@ const remove = (id) => {
                 <v-btn icon variant="text" size="small" @click="startEdit(item)">
                     <v-icon size="18">mdi-pencil-outline</v-icon>
                 </v-btn>
-                <v-btn icon variant="text" size="small" :disabled="items.length <= 1 || item.is_system" @click="remove(item.id)">
+                <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    color="error"
+                    :disabled="items.length <= 1"
+                    :title="items.length <= 1 ? 'Нужен хотя бы один элемент' : 'Удалить'"
+                    @click="remove(item)"
+                >
                     <v-icon size="18">mdi-delete-outline</v-icon>
                 </v-btn>
             </div>

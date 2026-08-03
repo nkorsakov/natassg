@@ -11,6 +11,7 @@ use App\Services\ExpenseService;
 use App\Services\WalletService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -109,19 +110,46 @@ class FinanceController extends Controller
         return back();
     }
 
-    public function release(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
+    public function closeToWallet(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
     {
-        return $this->settleAction($request, $advance, fn () => $advances->releaseToFree($advance));
+        return $this->closeAction($request, $advance, fn () => $advances->closeToWallet($advance));
     }
 
-    public function returnRemainder(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
+    public function closeWriteOff(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
     {
-        return $this->settleAction($request, $advance, fn () => $advances->returnToBoss($advance));
+        return $this->closeAction($request, $advance, fn () => $advances->closeWriteOff($advance));
     }
 
-    public function writeOff(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
+    public function attachExpense(Request $request, Advance $advance, Expense $expense, ExpenseService $expenses): RedirectResponse
     {
-        return $this->settleAction($request, $advance, fn () => $advances->writeOffUnknown($advance));
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
+        abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
+
+        $data = $request->validate([
+            'debit_account' => ['nullable', Rule::in(['wallet', 'advance'])],
+        ]);
+
+        try {
+            $expenses->attachToAdvance($advance, $expense, $data['debit_account'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['expense' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function detachExpense(Request $request, Advance $advance, Expense $expense, ExpenseService $expenses): RedirectResponse
+    {
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
+        abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
+
+        try {
+            $expenses->detachFromAdvance($advance, $expense);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['expense' => $e->getMessage()]);
+        }
+
+        return back();
     }
 
     public function storeFreeExpense(Request $request, ExpenseService $expenses): RedirectResponse
@@ -139,9 +167,12 @@ class FinanceController extends Controller
             'amount' => ['required', 'numeric', 'gt:0'],
             'description' => ['nullable', 'string', 'max:255'],
             'article_id' => ['required', 'string'],
-            'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'task_id' => ['nullable', 'integer', 'exists:tasks,id'],
             'advance_id' => ['nullable', 'integer', 'exists:advances,id'],
+            'debit_account' => ['nullable', Rule::in(['wallet', 'advance', 'unassigned'])],
+            'receipts' => ['nullable', 'array'],
+            'receipts.*' => ['file', 'max:20480'],
         ]);
 
         $target = $advance;
@@ -149,6 +180,11 @@ class FinanceController extends Controller
             $target = Advance::query()->findOrFail($data['advance_id']);
             abort_unless($request->user()?->canAccessOwned($target->user_id), 403);
         }
+
+        $data['receipt_files'] = collect($request->file('receipts') ?? [])
+            ->filter(fn ($file) => $file instanceof \Illuminate\Http\UploadedFile)
+            ->values()
+            ->all();
 
         try {
             $expenses->addExpense($request->user(), $data, $target);
@@ -167,8 +203,9 @@ class FinanceController extends Controller
             'amount' => ['sometimes', 'numeric', 'gt:0'],
             'description' => ['nullable', 'string', 'max:255'],
             'article_id' => ['sometimes', 'string'],
-            'supplier_id' => ['sometimes', 'integer', 'exists:suppliers,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'task_id' => ['nullable', 'integer', 'exists:tasks,id'],
+            'debit_account' => ['sometimes', Rule::in(['wallet', 'advance', 'unassigned'])],
         ]);
 
         try {
@@ -235,7 +272,7 @@ class FinanceController extends Controller
         return back();
     }
 
-    protected function settleAction(Request $request, Advance $advance, callable $action): RedirectResponse
+    protected function closeAction(Request $request, Advance $advance, callable $action): RedirectResponse
     {
         abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
 

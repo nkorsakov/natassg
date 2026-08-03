@@ -46,10 +46,11 @@ Route::middleware('auth')->group(function () {
     Route::put('/wallet/topups/{transaction}', [FinanceController::class, 'updateTopUp'])->name('wallet.topups.update');
     Route::post('/advances', [FinanceController::class, 'storeAdvance'])->name('advances.store');
     Route::put('/advances/{advance}', [FinanceController::class, 'updateAdvance'])->name('advances.update');
-    Route::post('/advances/{advance}/release', [FinanceController::class, 'release'])->name('advances.release');
-    Route::post('/advances/{advance}/return', [FinanceController::class, 'returnRemainder'])->name('advances.return');
-    Route::post('/advances/{advance}/writeoff', [FinanceController::class, 'writeOff'])->name('advances.writeoff');
+    Route::post('/advances/{advance}/close-to-wallet', [FinanceController::class, 'closeToWallet'])->name('advances.close-to-wallet');
+    Route::post('/advances/{advance}/close-writeoff', [FinanceController::class, 'closeWriteOff'])->name('advances.close-writeoff');
     Route::post('/advances/{advance}/expenses', [FinanceController::class, 'storeExpense'])->name('advances.expenses.store');
+    Route::post('/advances/{advance}/expenses/{expense}/attach', [FinanceController::class, 'attachExpense'])->name('advances.expenses.attach');
+    Route::post('/advances/{advance}/expenses/{expense}/detach', [FinanceController::class, 'detachExpense'])->name('advances.expenses.detach');
     Route::post('/advances/{advance}/expenses/{expense}/receipts', [FinanceController::class, 'storeAdvanceReceipt'])->name('advances.receipts.store');
     Route::post('/expenses', [FinanceController::class, 'storeFreeExpense'])->name('expenses.store');
     Route::put('/expenses/{expense}', [FinanceController::class, 'updateExpense'])->name('expenses.update');

@@ -222,28 +222,19 @@ class DemoSeeder extends Seeder
 
         // --- Авансы: все статусы и финансовые сценарии ---
         $advPending = $advances->create($user, [
-            'title' => '[DEMO] Аванс на согласовании',
+            'title' => '[DEMO] Заявка на аванс',
             'amount' => 5000,
             'status_id' => 'pending',
-            'note' => 'Ждёт решения',
+            'note' => 'Ещё не получены',
             'task_ids' => [$taskByStatus['waiting_money']->id],
         ]);
         DemoData::mark($advPending);
 
-        $advApproved = $advances->create($user, [
-            'title' => '[DEMO] Аванс одобрен, ещё не выдан',
-            'amount' => 8000,
-            'status_id' => 'approved',
-            'disbursement_method_id' => 'transfer',
-            'task_ids' => [$childB->id],
-        ]);
-        DemoData::mark($advApproved);
-
-        // Issued → частичная трата → reporting
+        // Received → частичная трата → reporting
         $advReporting = $advances->create($user, [
             'title' => '[DEMO] Аванс на отчёте (частично потрачен)',
             'amount' => 10000,
-            'status_id' => 'issued',
+            'status_id' => 'received',
             'disbursement_method_id' => 'transfer',
             'task_ids' => [$parent->id],
             'note' => 'Остаток есть',
@@ -257,16 +248,17 @@ class DemoSeeder extends Seeder
             'supplier_id' => $supplierLinked->id,
             'description' => '[DEMO] Частичная трата по авансу',
             'task_id' => $childA->id,
+            'debit_account' => 'advance',
         ], $advReporting);
         DemoData::mark($expPartial);
         DemoData::markWalletForExpense($expPartial);
         DemoData::mark($advReporting->fresh());
 
-        // Issued → полная трата → auto-close
+        // Received → полная трата → auto-close
         $advAutoclose = $advances->create($user, [
             'title' => '[DEMO] Аванс закрыт полной тратой',
             'amount' => 2000,
-            'status_id' => 'issued',
+            'status_id' => 'received',
             'disbursement_method_id' => 'cash_office',
             'task_ids' => [$giftTask->id],
         ]);
@@ -278,60 +270,40 @@ class DemoSeeder extends Seeder
             'article_id' => 'other',
             'supplier_id' => $supplierSolo->id,
             'description' => '[DEMO] Полная трата — автозакрытие',
+            'debit_account' => 'advance',
         ], $advAutoclose);
         DemoData::mark($expFull);
         DemoData::markWalletForExpense($expFull);
         DemoData::mark($advAutoclose->fresh());
 
-        // Issued → release
-        $advRelease = $advances->create($user, [
-            'title' => '[DEMO] Аванс закрыт: остаток → свободно',
+        // Close to wallet
+        $advToWallet = $advances->create($user, [
+            'title' => '[DEMO] Аванс закрыт: остаток → кошелёк',
             'amount' => 4000,
-            'status_id' => 'issued',
+            'status_id' => 'received',
             'disbursement_method_id' => 'transfer',
         ]);
-        DemoData::mark($advRelease);
-        DemoData::markWalletForAdvance($advRelease);
+        DemoData::mark($advToWallet);
+        DemoData::markWalletForAdvance($advToWallet);
 
-        $expRelease = $expenses->addExpense($user, [
+        $expToWallet = $expenses->addExpense($user, [
             'amount' => 1500,
             'article_id' => 'transport',
             'supplier_id' => $supplierSolo->id,
-            'description' => '[DEMO] Трата перед release',
-        ], $advRelease);
-        DemoData::mark($expRelease);
-        DemoData::markWalletForExpense($expRelease);
-        $advances->releaseToFree($advRelease->fresh(['status']));
-        DemoData::markWalletForAdvance($advRelease);
-        DemoData::mark($advRelease->fresh());
+            'description' => '[DEMO] Трата перед закрытием в кошелёк',
+            'debit_account' => 'advance',
+        ], $advToWallet);
+        DemoData::mark($expToWallet);
+        DemoData::markWalletForExpense($expToWallet);
+        $advances->closeToWallet($advToWallet->fresh(['status']));
+        DemoData::markWalletForAdvance($advToWallet);
+        DemoData::mark($advToWallet->fresh());
 
-        // Issued → return
-        $advReturn = $advances->create($user, [
-            'title' => '[DEMO] Аванс закрыт: возврат боссу',
-            'amount' => 3000,
-            'status_id' => 'issued',
-            'disbursement_method_id' => 'cash_office',
-        ]);
-        DemoData::mark($advReturn);
-        DemoData::markWalletForAdvance($advReturn);
-
-        $expReturn = $expenses->addExpense($user, [
-            'amount' => 1000,
-            'article_id' => 'food',
-            'supplier_id' => $supplierLinked->id,
-            'description' => '[DEMO] Трата перед возвратом',
-        ], $advReturn);
-        DemoData::mark($expReturn);
-        DemoData::markWalletForExpense($expReturn);
-        $advances->returnToBoss($advReturn->fresh(['status']));
-        DemoData::markWalletForAdvance($advReturn);
-        DemoData::mark($advReturn->fresh());
-
-        // Issued → writeoff
+        // Close writeoff
         $advWriteoff = $advances->create($user, [
-            'title' => '[DEMO] Аванс закрыт: списание неизвестного',
+            'title' => '[DEMO] Аванс закрыт: списание без отчёта',
             'amount' => 2500,
-            'status_id' => 'issued',
+            'status_id' => 'received',
             'disbursement_method_id' => 'transfer',
         ]);
         DemoData::mark($advWriteoff);
@@ -342,33 +314,35 @@ class DemoSeeder extends Seeder
             'article_id' => 'services',
             'supplier_id' => $supplierSolo->id,
             'description' => '[DEMO] Трата перед writeoff',
+            'debit_account' => 'advance',
         ], $advWriteoff);
         DemoData::mark($expWriteoff);
         DemoData::markWalletForExpense($expWriteoff);
-        $advances->writeOffUnknown($advWriteoff->fresh(['status']));
+        $advances->closeWriteOff($advWriteoff->fresh(['status']));
         DemoData::markWalletForAdvance($advWriteoff);
         DemoData::mark($advWriteoff->fresh());
 
-        // Чистый issued без трат
-        $advIssuedOpen = $advances->create($user, [
-            'title' => '[DEMO] Аванс выдан, трат ещё нет',
+        // Чистый received без трат
+        $advReceivedOpen = $advances->create($user, [
+            'title' => '[DEMO] Деньги получены, трат ещё нет',
             'amount' => 6000,
-            'status_id' => 'issued',
+            'status_id' => 'received',
             'disbursement_method_id' => 'transfer',
             'task_ids' => [$tripTask->id],
-            'note' => 'Деньги на руках',
+            'note' => 'На счёте аванса',
         ]);
-        DemoData::mark($advIssuedOpen);
-        DemoData::markWalletForAdvance($advIssuedOpen);
+        DemoData::mark($advReceivedOpen);
+        DemoData::markWalletForAdvance($advReceivedOpen);
 
-        // --- Свободные траты по всем статьям ---
+        // --- Расходы: неразнесённые и с кошелька ---
         $freeArticles = ['transport', 'food', 'supplies', 'services', 'other'];
         foreach ($freeArticles as $i => $article) {
             $exp = $expenses->addExpense($user, [
                 'amount' => 300 + ($i * 50),
                 'article_id' => $article,
                 'supplier_id' => $i % 2 === 0 ? $supplierSolo->id : $supplierLinked->id,
-                'description' => "[DEMO] Свободная трата: {$article}",
+                'description' => "[DEMO] Расход: {$article}",
+                'debit_account' => $i % 2 === 0 ? 'unassigned' : 'wallet',
             ]);
             DemoData::mark($exp);
             DemoData::markWalletForExpense($exp);

@@ -231,7 +231,17 @@ class SkyDeskPresenter
     public static function advance(Advance $advance): array
     {
         $advance->loadMissing(['user', 'status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
-        $spent = (int) $advance->expenses->sum('amount_minor');
+        $remainingMinor = (int) WalletTransaction::query()
+            ->where('advance_id', $advance->id)
+            ->where('account', WalletTransaction::ACCOUNT_ADVANCE)
+            ->sum('amount_minor');
+        $spentMinor = max(0, (int) $advance->amount_minor - max(0, $remainingMinor));
+        if (in_array($advance->status?->slug, ['received', 'reporting', 'closed'], true)) {
+            $spentOnAdvance = (int) $advance->expenses
+                ->where('debit_account', WalletTransaction::ACCOUNT_ADVANCE)
+                ->sum('amount_minor');
+            $spentMinor = $spentOnAdvance;
+        }
         $amount = DictionaryResolver::minorToRubles((int) $advance->amount_minor);
 
         return [
@@ -247,8 +257,9 @@ class SkyDeskPresenter
             'status_id' => $advance->status?->slug,
             'disbursement_method_id' => $advance->disbursementMethod?->slug,
             'expense_ids' => $advance->expenses->pluck('id')->values(),
-            'spent' => DictionaryResolver::minorToRubles($spent),
-            'remaining' => DictionaryResolver::minorToRubles((int) $advance->amount_minor - $spent),
+            'spent' => DictionaryResolver::minorToRubles($spentMinor),
+            'remaining' => DictionaryResolver::minorToRubles(max(0, $remainingMinor)),
+            'remaining_minor' => max(0, $remainingMinor),
             'expenses' => $advance->expenses->map(fn ($e) => self::expense($e))->values(),
         ];
     }
@@ -260,6 +271,7 @@ class SkyDeskPresenter
         return [
             'id' => $expense->id,
             'advance_id' => $expense->advance_id,
+            'debit_account' => $expense->debit_account ?? WalletTransaction::ACCOUNT_UNASSIGNED,
             'task_id' => $expense->task_id,
             'article_id' => $expense->article?->slug,
             'supplier_id' => $expense->supplier_id,
@@ -314,46 +326,73 @@ class SkyDeskPresenter
 
     public static function wallet(?Wallet $wallet, $advances = null): array
     {
-        $minor = (int) ($wallet?->balance_minor ?? 0);
+        $walletMinor = (int) ($wallet?->balance_minor ?? 0);
 
         $inAdvancesMinor = 0;
         if ($advances) {
             foreach ($advances as $a) {
                 $status = is_array($a) ? ($a['status_id'] ?? null) : $a->status?->slug;
-                if (! in_array($status, ['issued', 'reporting'], true)) {
+                if (! in_array($status, ['received', 'reporting'], true)) {
                     continue;
                 }
                 $remaining = is_array($a)
-                    ? DictionaryResolver::rublesToMinor($a['remaining'] ?? 0)
-                    : ((int) $a->amount_minor - (int) $a->expenses->sum('amount_minor'));
+                    ? (int) ($a['remaining_minor'] ?? DictionaryResolver::rublesToMinor($a['remaining'] ?? 0))
+                    : (int) WalletTransaction::query()
+                        ->where('advance_id', $a->id)
+                        ->where('account', WalletTransaction::ACCOUNT_ADVANCE)
+                        ->sum('amount_minor');
                 if ($remaining > 0) {
                     $inAdvancesMinor += $remaining;
                 }
             }
         }
 
+        $unassignedMinor = 0;
+        if ($wallet) {
+            $unassignedMinor = (int) abs((int) WalletTransaction::query()
+                ->where('wallet_id', $wallet->id)
+                ->where('account', WalletTransaction::ACCOUNT_UNASSIGNED)
+                ->sum('amount_minor'));
+        }
+
+        $onHandMinor = $walletMinor + $inAdvancesMinor - $unassignedMinor;
+
         $transactions = [];
         if ($wallet && $wallet->relationLoaded('transactions')) {
-            $transactions = $wallet->transactions->map(fn (WalletTransaction $tx) => [
-                'id' => $tx->id,
-                'type' => $tx->type,
-                'title' => self::transactionTitle($tx),
-                'amount' => DictionaryResolver::minorToRubles((int) $tx->amount_minor),
-                'amount_minor' => $tx->amount_minor,
-                'advance_id' => $tx->advance_id,
-                'expense_id' => $tx->expense_id,
-                'meta' => $tx->meta,
-                'created_at' => optional($tx->created_at)?->toIso8601String(),
-            ])->values();
+            $transactions = $wallet->transactions
+                ->filter(function (WalletTransaction $tx) {
+                    $meta = is_array($tx->meta) ? $tx->meta : [];
+
+                    return ($meta['reason'] ?? null) !== 'expense_reverse';
+                })
+                ->map(fn (WalletTransaction $tx) => [
+                    'id' => $tx->id,
+                    'type' => $tx->type,
+                    'account' => $tx->account,
+                    'title' => self::transactionTitle($tx),
+                    'amount' => DictionaryResolver::minorToRubles((int) $tx->amount_minor),
+                    'amount_minor' => $tx->amount_minor,
+                    'advance_id' => $tx->advance_id,
+                    'expense_id' => $tx->expense_id,
+                    'meta' => $tx->meta,
+                    'created_at' => optional($tx->created_at)?->toIso8601String(),
+                ])->values();
         }
 
         return [
-            'balance' => DictionaryResolver::minorToRubles($minor),
-            'balance_minor' => $minor,
+            'wallet' => DictionaryResolver::minorToRubles($walletMinor),
+            'wallet_minor' => $walletMinor,
+            'balance' => DictionaryResolver::minorToRubles($onHandMinor),
+            'balance_minor' => $onHandMinor,
+            'on_hand' => DictionaryResolver::minorToRubles($onHandMinor),
+            'on_hand_minor' => $onHandMinor,
             'in_advances' => DictionaryResolver::minorToRubles($inAdvancesMinor),
             'in_advances_minor' => $inAdvancesMinor,
-            'free' => DictionaryResolver::minorToRubles($minor - $inAdvancesMinor),
-            'free_minor' => $minor - $inAdvancesMinor,
+            'unassigned' => DictionaryResolver::minorToRubles($unassignedMinor),
+            'unassigned_minor' => $unassignedMinor,
+            // aliases for older UI fields
+            'free' => DictionaryResolver::minorToRubles($walletMinor),
+            'free_minor' => $walletMinor,
             'currency' => $wallet?->currency ?? 'RUB',
             'transactions' => $transactions,
         ];
@@ -366,25 +405,36 @@ class SkyDeskPresenter
         $expenseTitle = $tx->expense?->description
             ?: $tx->expense?->article?->label;
 
-        return match ($tx->type) {
-            WalletTransaction::TYPE_TOPUP => trim((string) ($meta['title'] ?? ''))
+        if ($tx->type === WalletTransaction::TYPE_INCOME) {
+            if ($tx->account === WalletTransaction::ACCOUNT_ADVANCE) {
+                return trim((string) ($advanceTitle ?? '')) ?: 'Аванс получен';
+            }
+
+            return trim((string) ($meta['title'] ?? ''))
                 ?: trim((string) ($meta['note'] ?? ''))
-                ?: 'Пополнение',
-            WalletTransaction::TYPE_ISSUE => trim((string) ($advanceTitle ?? '')) ?: 'Выдача аванса',
-            WalletTransaction::TYPE_EXPENSE => trim((string) ($expenseTitle ?? '')) ?: 'Трата',
-            WalletTransaction::TYPE_RETURN => $advanceTitle
-                ? 'Возврат: '.$advanceTitle
-                : 'Возврат',
-            WalletTransaction::TYPE_WRITEOFF => $advanceTitle
-                ? 'Списание: '.$advanceTitle
-                : 'Списание',
-            WalletTransaction::TYPE_RELEASE => $advanceTitle
-                ? 'В свободно: '.$advanceTitle
-                : 'В свободный остаток',
-            WalletTransaction::TYPE_AMOUNT_ADJUST => $advanceTitle
-                ? 'Корректировка: '.$advanceTitle
-                : 'Корректировка суммы',
-            default => (string) $tx->type,
-        };
+                ?: 'Приход';
+        }
+
+        if ($tx->type === WalletTransaction::TYPE_TRANSFER) {
+            $kind = $meta['kind'] ?? null;
+            if ($kind === 'close_to_wallet') {
+                return $advanceTitle ? 'В кошелёк: '.$advanceTitle : 'Закрытие в кошелёк';
+            }
+
+            return $advanceTitle ? 'Перевод: '.$advanceTitle : 'Перевод';
+        }
+
+        if ($tx->type === WalletTransaction::TYPE_EXPENSE) {
+            if (($meta['kind'] ?? null) === 'close_writeoff') {
+                return $advanceTitle ? 'Списание без отчёта: '.$advanceTitle : 'Списание без отчёта';
+            }
+            if (($meta['reason'] ?? null) === 'expense_reverse') {
+                return 'Корректировка траты';
+            }
+
+            return trim((string) ($expenseTitle ?? '')) ?: 'Трата';
+        }
+
+        return (string) $tx->type;
     }
 }

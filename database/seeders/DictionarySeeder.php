@@ -58,15 +58,15 @@ class DictionarySeeder extends Seeder
         }
 
         $advanceStatuses = [
-            ['slug' => 'pending', 'label' => 'На согласовании', 'color' => '#FFAD4D', 'sort' => 10, 'is_system' => true],
-            ['slug' => 'approved', 'label' => 'Одобрена', 'color' => '#5B8DEF', 'sort' => 20, 'is_system' => true],
-            ['slug' => 'issued', 'label' => 'Деньги выданы', 'color' => '#6957EE', 'sort' => 30, 'is_system' => true],
-            ['slug' => 'reporting', 'label' => 'На отчёте', 'color' => '#0D9488', 'sort' => 40, 'is_system' => true],
-            ['slug' => 'closed', 'label' => 'Закрыта', 'color' => '#626571', 'sort' => 50, 'is_system' => true],
+            ['slug' => 'pending', 'label' => 'Заявка', 'color' => '#FFAD4D', 'sort' => 10, 'is_system' => true],
+            ['slug' => 'received', 'label' => 'Деньги получены', 'color' => '#6957EE', 'sort' => 20, 'is_system' => true],
+            ['slug' => 'reporting', 'label' => 'На отчёте', 'color' => '#0D9488', 'sort' => 30, 'is_system' => true],
+            ['slug' => 'closed', 'label' => 'Закрыта', 'color' => '#626571', 'sort' => 40, 'is_system' => true],
         ];
         foreach ($advanceStatuses as $row) {
             AdvanceStatus::updateOrCreate(['slug' => $row['slug']], $row);
         }
+        AdvanceStatus::query()->whereIn('slug', ['approved', 'issued'])->delete();
 
         $articles = [
             ['slug' => 'transport', 'label' => 'Транспорт', 'color' => '#5B8DEF', 'sort' => 10, 'is_system' => true],

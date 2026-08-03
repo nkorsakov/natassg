@@ -214,17 +214,40 @@ class SettingsController extends Controller
         $model = $this->modelFor($key);
         $item = $model::where('slug', $slug)->firstOrFail();
 
-        if ($item->is_system) {
-            return back()->withErrors(['dict' => 'Системный элемент нельзя удалить.']);
-        }
-
         if ($model::count() <= 1) {
-            return back()->withErrors(['dict' => 'Нужен хотя бы один элемент.']);
+            return back()->withErrors(['dict' => 'Нужен хотя бы один элемент в справочнике.']);
         }
 
-        $item->delete();
+        $usage = $this->dictUsageCount($key, $item);
+        if ($usage > 0) {
+            return back()->withErrors([
+                'dict' => "«{$item->label}» используется в данных ({$usage}). Сначала перенесите записи на другой пункт.",
+            ]);
+        }
+
+        try {
+            $item->delete();
+        } catch (\Throwable $e) {
+            return back()->withErrors(['dict' => 'Не удалось удалить: элемент ещё связан с данными.']);
+        }
 
         return back();
+    }
+
+    protected function dictUsageCount(string $key, mixed $item): int
+    {
+        $id = (int) $item->id;
+
+        return match ($key) {
+            'statuses' => \App\Models\Task::query()->where('status_id', $id)->count(),
+            'priorities' => \App\Models\Task::query()->where('priority_id', $id)->count(),
+            'taskTypes' => \App\Models\Task::query()->where('type_id', $id)->count(),
+            'eventTypes' => \App\Models\CalendarEvent::query()->where('event_type_id', $id)->count(),
+            'advanceStatuses' => \App\Models\Advance::query()->where('status_id', $id)->count(),
+            'expenseArticles' => \App\Models\Expense::query()->where('article_id', $id)->count(),
+            'disbursementMethods' => \App\Models\Advance::query()->where('disbursement_method_id', $id)->count(),
+            default => 0,
+        };
     }
 
     public function storeSupplier(Request $request): RedirectResponse
