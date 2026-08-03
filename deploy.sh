@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Production deploy for SkyDesk (no Docker).
-# Usage: ./deploy.sh
+# Usage: ./deploy.sh   (or: bash deploy.sh — not sh deploy.sh)
 # Optional: BRANCH=main ./deploy.sh
+# Re-exec under bash if invoked via sh/dash (pipefail is bash-only).
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
