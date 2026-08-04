@@ -310,8 +310,9 @@ class ExpenseService
                 throw new InvalidArgumentException('Нельзя удалить трату закрытого аванса');
             }
 
-            $owner = $this->resolveOwner($user, $expense->user_id);
-            $this->reverseExpenseDebits($owner, $expense);
+            // Hard-delete ledger rows. Do NOT reverse-then-delete: expense_id is nullOnDelete
+            // historically, which left orphan "Трата" rows in the registry after SET NULL.
+            WalletTransaction::query()->where('expense_id', $expense->id)->delete();
 
             foreach ($expense->receipts as $receipt) {
                 Storage::disk('public')->delete($receipt->path);

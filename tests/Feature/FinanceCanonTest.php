@@ -282,6 +282,53 @@ class FinanceCanonTest extends TestCase
         $this->assertSame(40000, (int) $this->user->wallet()->value('balance_minor'));
     }
 
+    public function test_destroy_expense_removes_ledger_and_restores_advance(): void
+    {
+        $advances = app(AdvanceService::class);
+        $expenses = app(ExpenseService::class);
+
+        $advance = $advances->create($this->user, [
+            'title' => 'Удаляемая трата',
+            'amount' => 1000,
+            'status_id' => 'received',
+            'disbursement_method_id' => $this->method->slug,
+        ]);
+
+        $expense = $expenses->addExpense($this->user, [
+            'amount' => 400,
+            'article_id' => $this->article->slug,
+            'supplier_id' => $this->supplier->id,
+            'debit_account' => 'advance',
+            'description' => 'Временная',
+        ], $advance);
+
+        $this->assertSame(60000, $advances->remainingMinor($advance->fresh()));
+        $this->assertDatabaseHas('wallet_transactions', [
+            'expense_id' => $expense->id,
+            'account' => WalletTransaction::ACCOUNT_ADVANCE,
+            'amount_minor' => -40000,
+        ]);
+
+        $expenses->destroyExpense($this->user, $expense);
+
+        $this->assertDatabaseMissing('expenses', ['id' => $expense->id]);
+        $this->assertSame(0, WalletTransaction::query()->where('expense_id', $expense->id)->count());
+        $this->assertSame(
+            0,
+            WalletTransaction::query()
+                ->where('advance_id', $advance->id)
+                ->where('type', WalletTransaction::TYPE_EXPENSE)
+                ->count()
+        );
+        $this->assertSame(100000, $advances->remainingMinor($advance->fresh()));
+
+        $wallet = $this->user->fresh()->wallet->load(['transactions.advance', 'transactions.expense.article']);
+        $presented = SkyDeskPresenter::wallet($wallet, collect([$advance->fresh()]));
+        $titles = collect($presented['transactions'])->pluck('title');
+        $this->assertFalse($titles->contains('Временная'));
+        $this->assertFalse($titles->contains('Трата'));
+    }
+
     public function test_http_income_and_received(): void
     {
         $this->actingAs($this->user)

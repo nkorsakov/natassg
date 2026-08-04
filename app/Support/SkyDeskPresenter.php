@@ -379,7 +379,20 @@ class SkyDeskPresenter
                 ->filter(function (WalletTransaction $tx) {
                     $meta = is_array($tx->meta) ? $tx->meta : [];
 
-                    return ($meta['reason'] ?? null) !== 'expense_reverse';
+                    if (($meta['reason'] ?? null) === 'expense_reverse') {
+                        return false;
+                    }
+
+                    // Orphans after expense delete + nullOnDelete FK: no expense row, but debit still shown.
+                    if (
+                        $tx->type === WalletTransaction::TYPE_EXPENSE
+                        && $tx->expense_id === null
+                        && ($meta['kind'] ?? null) !== 'close_writeoff'
+                    ) {
+                        return false;
+                    }
+
+                    return true;
                 })
                 ->map(fn (WalletTransaction $tx) => [
                     'id' => $tx->id,
