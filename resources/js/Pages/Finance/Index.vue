@@ -345,54 +345,56 @@ const wallet = computed(() => store.wallet.value);
         subtitle="Кошелёк, авансы и реестр движения."
         :show-fab="false"
     >
-        <template #actions>
-            <v-btn
-                variant="tonal"
-                prepend-icon="mdi-wallet-plus"
-                size="small"
-                class="flex-grow-1 flex-md-grow-0"
-                @click="openTopUpCreate"
-            >
-                Приход
-            </v-btn>
-            <v-btn
-                variant="tonal"
-                prepend-icon="mdi-receipt-text-plus"
-                size="small"
-                class="flex-grow-1 flex-md-grow-0"
-                @click="openExpenseCreate"
-            >
-                Расход
-            </v-btn>
-            <v-btn
-                color="primary"
-                prepend-icon="mdi-cash-plus"
-                size="small"
-                class="flex-grow-1 flex-md-grow-0"
-                @click="createAdvance"
-            >
-                <span class="d-md-none">Заявка</span>
-                <span class="d-none d-md-inline">Заявка на аванс</span>
-            </v-btn>
-        </template>
-
-        <v-card class="pa-5 mb-5 skydesk-accent-panel">
-            <div class="text-caption font-weight-bold text-primary mb-1">На руках</div>
-            <div class="text-h4 font-weight-bold" style="font-family:Fraunces,Georgia,serif;letter-spacing:-.03em">
-                {{ store.formatMoney(wallet.on_hand ?? wallet.balance) }}
-            </div>
-            <div class="d-flex flex-wrap ga-4 mt-3">
-                <div>
-                    <div class="text-caption text-medium-emphasis">Кошелёк</div>
-                    <div class="text-h6 font-weight-bold">{{ store.formatMoney(wallet.wallet ?? wallet.free) }}</div>
+        <v-card class="pa-4 mb-4 skydesk-accent-panel">
+            <div class="d-flex align-start justify-space-between ga-3 flex-wrap">
+                <div class="min-w-0">
+                    <div class="text-caption font-weight-bold text-primary mb-0">На руках</div>
+                    <div
+                        class="text-h5 font-weight-bold"
+                        style="font-family:Fraunces,Georgia,serif;letter-spacing:-.03em;line-height:1.2"
+                    >
+                        {{ store.formatMoney(wallet.on_hand ?? wallet.balance) }}
+                    </div>
+                    <div class="d-flex flex-wrap ga-3 mt-2 text-caption">
+                        <span>
+                            <span class="text-medium-emphasis">Кошелёк</span>
+                            <b class="ms-1">{{ store.formatMoney(wallet.wallet ?? wallet.free) }}</b>
+                        </span>
+                        <span>
+                            <span class="text-medium-emphasis">В авансах</span>
+                            <b class="ms-1">{{ store.formatMoney(wallet.in_advances) }}</b>
+                        </span>
+                        <span v-if="Number(wallet.unassigned) > 0">
+                            <span class="text-medium-emphasis">Не разнесено</span>
+                            <b class="ms-1">{{ store.formatMoney(wallet.unassigned) }}</b>
+                        </span>
+                    </div>
                 </div>
-                <div>
-                    <div class="text-caption text-medium-emphasis">В авансах</div>
-                    <div class="text-h6 font-weight-bold">{{ store.formatMoney(wallet.in_advances) }}</div>
-                </div>
-                <div v-if="Number(wallet.unassigned) > 0">
-                    <div class="text-caption text-medium-emphasis">Не разнесено</div>
-                    <div class="text-h6 font-weight-bold">{{ store.formatMoney(wallet.unassigned) }}</div>
+                <div class="d-flex align-center ga-2 flex-shrink-0 flex-wrap">
+                    <v-btn
+                        variant="tonal"
+                        prepend-icon="mdi-wallet-plus"
+                        size="small"
+                        @click="openTopUpCreate"
+                    >
+                        Приход
+                    </v-btn>
+                    <v-btn
+                        variant="tonal"
+                        prepend-icon="mdi-receipt-text-plus"
+                        size="small"
+                        @click="openExpenseCreate"
+                    >
+                        Расход
+                    </v-btn>
+                    <v-btn
+                        color="primary"
+                        prepend-icon="mdi-cash-plus"
+                        size="small"
+                        @click="createAdvance"
+                    >
+                        Заявка
+                    </v-btn>
                 </div>
             </div>
         </v-card>
@@ -434,21 +436,17 @@ const wallet = computed(() => store.wallet.value);
         </div>
 
         <div v-else>
-            <div class="d-flex flex-wrap ga-3 mb-5">
-                <v-card
+            <div class="d-flex flex-wrap ga-4 mb-4 text-caption">
+                <span
                     v-for="s in summary"
                     :key="s.label"
-                    class="pa-4"
-                    style="flex:1 1 140px;min-width:140px"
                 >
-                    <div class="text-caption text-medium-emphasis mb-1">{{ s.label }}</div>
-                    <div
-                        class="text-h6 font-weight-bold"
+                    <span class="text-medium-emphasis">{{ s.label }}</span>
+                    <b
+                        class="ms-1"
                         :style="s.tone === 'orange' ? 'color:#E67E22' : s.tone === 'green' ? 'color:#37A878' : ''"
-                    >
-                        {{ s.amount }}
-                    </div>
-                </v-card>
+                    >{{ s.amount }}</b>
+                </span>
             </div>
 
             <div class="d-flex ga-2 mb-4 flex-wrap">
@@ -457,6 +455,7 @@ const wallet = computed(() => store.wallet.value);
                     :key="f.value"
                     :color="filter === f.value ? 'primary' : undefined"
                     :variant="filter === f.value ? 'flat' : 'tonal'"
+                    size="small"
                     @click="filter = f.value"
                 >
                     {{ f.label }}
