@@ -92,7 +92,7 @@ class ExpenseService
                 'description' => $data['description'] ?? null,
             ]);
 
-            $this->postExpenseDebits($owner, $expense, $advance, $amountMinor, $debitAccount);
+            $this->postExpenseDebits($owner, $expense, $advance, $amountMinor, $debitAccount, $data['occurred_at'] ?? null);
 
             $receiptFiles = $data['receipt_files'] ?? [];
             foreach ($receiptFiles as $file) {
@@ -179,15 +179,21 @@ class ExpenseService
             }
 
             $owner = $this->resolveOwner($user, $expense->user_id);
+            $occurredAt = array_key_exists('occurred_at', $data)
+                ? $data['occurred_at']
+                : $this->expenseOccurredAt($expense);
 
             if ($newAmount !== $oldAmount || $newAccount !== $oldAccount) {
-                $this->reverseExpenseDebits($owner, $expense);
+                $this->reverseExpenseDebits($owner, $expense, $occurredAt);
                 $expense->amount_minor = $newAmount;
                 $expense->debit_account = $newAccount;
                 $expense->save();
-                $this->postExpenseDebits($owner, $expense, $advance, $newAmount, $newAccount);
+                $this->postExpenseDebits($owner, $expense, $advance, $newAmount, $newAccount, $occurredAt);
             } else {
                 $expense->save();
+                if (array_key_exists('occurred_at', $data)) {
+                    $this->touchExpenseOccurredAt($expense, $occurredAt);
+                }
             }
 
             if ($advance) {
@@ -248,10 +254,11 @@ class ExpenseService
             $expense->save();
 
             $owner = $advance->user;
-            $this->reverseExpenseDebits($owner, $expense);
+            $occurredAt = $this->expenseOccurredAt($expense);
+            $this->reverseExpenseDebits($owner, $expense, $occurredAt);
             $expense->debit_account = $targetAccount;
             $expense->save();
-            $this->postExpenseDebits($owner, $expense, $advance, (int) $expense->amount_minor, $targetAccount);
+            $this->postExpenseDebits($owner, $expense, $advance, (int) $expense->amount_minor, $targetAccount, $occurredAt);
 
             $this->advances->markReportingIfNeeded($advance);
             $this->advances->maybeAutoClose($advance);
@@ -274,13 +281,14 @@ class ExpenseService
             }
 
             $owner = $advance->user;
-            $this->reverseExpenseDebits($owner, $expense);
+            $occurredAt = $this->expenseOccurredAt($expense);
+            $this->reverseExpenseDebits($owner, $expense, $occurredAt);
 
             $expense->advance_id = null;
             $expense->debit_account = WalletTransaction::ACCOUNT_UNASSIGNED;
             $expense->save();
 
-            $this->postExpenseDebits($owner, $expense, null, (int) $expense->amount_minor, WalletTransaction::ACCOUNT_UNASSIGNED);
+            $this->postExpenseDebits($owner, $expense, null, (int) $expense->amount_minor, WalletTransaction::ACCOUNT_UNASSIGNED, $occurredAt);
 
             return $expense->fresh(['receipts', 'article', 'supplier']);
         });
@@ -341,9 +349,13 @@ class ExpenseService
         ?Advance $advance,
         int $amountMinor,
         string $debitAccount,
+        mixed $occurredAt = null,
     ): void {
+        $linksBase = ['occurred_at' => $occurredAt];
+
         if ($debitAccount === WalletTransaction::ACCOUNT_UNASSIGNED) {
             $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_UNASSIGNED, -$amountMinor, [
+                ...$linksBase,
                 'advance_id' => null,
                 'expense_id' => $expense->id,
             ]);
@@ -353,6 +365,7 @@ class ExpenseService
 
         if ($debitAccount === WalletTransaction::ACCOUNT_WALLET) {
             $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_WALLET, -$amountMinor, [
+                ...$linksBase,
                 'advance_id' => $advance?->id,
                 'expense_id' => $expense->id,
             ]);
@@ -367,12 +380,14 @@ class ExpenseService
 
         if ($fromAdvance > 0) {
             $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_ADVANCE, -$fromAdvance, [
+                ...$linksBase,
                 'advance_id' => $advance?->id,
                 'expense_id' => $expense->id,
             ]);
         }
         if ($fromWallet > 0) {
             $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_WALLET, -$fromWallet, [
+                ...$linksBase,
                 'advance_id' => $advance?->id,
                 'expense_id' => $expense->id,
                 'meta' => ['kind' => 'advance_overspend'],
@@ -380,7 +395,7 @@ class ExpenseService
         }
     }
 
-    protected function reverseExpenseDebits(User $owner, Expense $expense): void
+    protected function reverseExpenseDebits(User $owner, Expense $expense, mixed $occurredAt = null): void
     {
         $nets = WalletTransaction::query()
             ->where('expense_id', $expense->id)
@@ -396,11 +411,45 @@ class ExpenseService
             }
 
             $this->ledger->apply($owner, WalletTransaction::TYPE_EXPENSE, $row->account, -$total, [
+                'occurred_at' => $occurredAt,
                 'advance_id' => $row->advance_id,
                 'expense_id' => $expense->id,
                 'meta' => ['reason' => 'expense_reverse'],
             ]);
         }
+    }
+
+    protected function expenseOccurredAt(Expense $expense): mixed
+    {
+        $tx = WalletTransaction::query()
+            ->where('expense_id', $expense->id)
+            ->where('type', WalletTransaction::TYPE_EXPENSE)
+            ->orderByDesc('id')
+            ->get()
+            ->first(function (WalletTransaction $tx) {
+                $meta = is_array($tx->meta) ? $tx->meta : [];
+
+                return ($meta['reason'] ?? null) !== 'expense_reverse';
+            });
+
+        return $tx?->occurred_at;
+    }
+
+    protected function touchExpenseOccurredAt(Expense $expense, mixed $occurredAt): void
+    {
+        $resolved = $this->ledger->resolveOccurredAt($occurredAt);
+        WalletTransaction::query()
+            ->where('expense_id', $expense->id)
+            ->where('type', WalletTransaction::TYPE_EXPENSE)
+            ->get()
+            ->each(function (WalletTransaction $tx) use ($resolved) {
+                $meta = is_array($tx->meta) ? $tx->meta : [];
+                if (($meta['reason'] ?? null) === 'expense_reverse') {
+                    return;
+                }
+                $tx->occurred_at = $resolved;
+                $tx->save();
+            });
     }
 
     protected function normalizeAccount(?string $account): string

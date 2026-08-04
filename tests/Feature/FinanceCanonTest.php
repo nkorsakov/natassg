@@ -46,6 +46,7 @@ class FinanceCanonTest extends TestCase
         app(WalletService::class)->topUp($this->user, [
             'amount' => 1000,
             'disbursement_method_id' => $this->method->slug,
+            'occurred_at' => '2026-07-15',
         ]);
 
         $this->assertSame(100000, (int) $this->user->wallet()->value('balance_minor'));
@@ -54,6 +55,10 @@ class FinanceCanonTest extends TestCase
             'account' => WalletTransaction::ACCOUNT_WALLET,
             'amount_minor' => 100000,
         ]);
+        $this->assertSame(
+            '2026-07-15',
+            WalletTransaction::query()->latest('id')->value('occurred_at')?->toDateString()
+        );
     }
 
     public function test_received_credits_advance_account_not_wallet(): void

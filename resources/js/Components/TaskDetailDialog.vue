@@ -14,7 +14,7 @@ const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
     taskId: { type: [String, Number], default: null },
 });
-const emit = defineEmits(['open-task', 'open-event', 'open-advance']);
+const emit = defineEmits(['open-task', 'open-event', 'open-advance', 'open-advance-create']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
@@ -223,13 +223,7 @@ const onAdd = async (id) => {
         showNewEvent.value = false;
         linkEventId.value = null;
     } else if (id === 'advance') {
-        const adv = await store.createAdvance({
-            title: '',
-            task_id: props.taskId,
-            amount: 0,
-            status_id: 'pending',
-        });
-        if (adv?.id) emit('open-advance', adv.id);
+        emit('open-advance-create', { task_id: props.taskId });
     } else if (id === 'file') {
         fileInput.value?.click();
     }

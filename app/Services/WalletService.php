@@ -37,6 +37,7 @@ class WalletService
             WalletTransaction::ACCOUNT_WALLET,
             $amountMinor,
             [
+                'occurred_at' => $data['occurred_at'] ?? null,
                 'meta' => [
                     'note' => $data['note'] ?? null,
                     'disbursement_method_id' => $method?->slug,
@@ -92,6 +93,9 @@ class WalletService
             $delta = $newAmount - (int) $tx->amount_minor;
             $tx->amount_minor = $newAmount;
             $tx->meta = $meta;
+            if (array_key_exists('occurred_at', $data)) {
+                $tx->occurred_at = $this->ledger->resolveOccurredAt($data['occurred_at']);
+            }
             $tx->save();
 
             if ($delta !== 0) {
@@ -99,6 +103,24 @@ class WalletService
             }
 
             return $tx->fresh();
+        });
+    }
+
+    public function destroyIncome(User $user, WalletTransaction $tx): void
+    {
+        DB::transaction(function () use ($user, $tx) {
+            $tx = WalletTransaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
+            $wallet = Wallet::whereKey($tx->wallet_id)->lockForUpdate()->firstOrFail();
+
+            if (! $user->canAccessOwned($wallet->user_id)) {
+                throw new InvalidArgumentException('Чужая операция');
+            }
+            if ($tx->type !== WalletTransaction::TYPE_INCOME || $tx->account !== WalletTransaction::ACCOUNT_WALLET) {
+                throw new InvalidArgumentException('Можно удалить только приход на кошелёк');
+            }
+
+            $wallet->increment('balance_minor', -((int) $tx->amount_minor));
+            $tx->delete();
         });
     }
 }

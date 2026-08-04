@@ -32,6 +32,7 @@ class FinanceController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
             'title' => ['nullable', 'string', 'max:255'],
             'disbursement_method_id' => ['required', 'string'],
+            'occurred_at' => ['nullable', 'date'],
         ]);
 
         try {
@@ -53,6 +54,7 @@ class FinanceController extends Controller
             'note' => ['nullable', 'string', 'max:255'],
             'title' => ['nullable', 'string', 'max:255'],
             'disbursement_method_id' => ['sometimes', 'string'],
+            'occurred_at' => ['nullable', 'date'],
         ]);
 
         try {
@@ -105,6 +107,51 @@ class FinanceController extends Controller
             $advances->update($advance, $data);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['status_id' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function destroyAdvance(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
+    {
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
+
+        try {
+            $advances->destroy($advance);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['advance' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function destroyTransaction(
+        Request $request,
+        WalletTransaction $transaction,
+        WalletService $wallets,
+        ExpenseService $expenses,
+    ): RedirectResponse {
+        $transaction->loadMissing('wallet');
+        abort_unless($request->user()?->canAccessOwned($transaction->wallet?->user_id), 403);
+
+        try {
+            if (
+                $transaction->type === WalletTransaction::TYPE_INCOME
+                && $transaction->account === WalletTransaction::ACCOUNT_WALLET
+            ) {
+                $wallets->destroyIncome($request->user(), $transaction);
+            } elseif (
+                $transaction->type === WalletTransaction::TYPE_EXPENSE
+                && $transaction->expense_id
+            ) {
+                $expense = Expense::query()->findOrFail($transaction->expense_id);
+                abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
+                $expenses->destroyExpense($request->user(), $expense);
+            } else {
+                throw new InvalidArgumentException('Эту проводку удалите через связанный аванс.');
+            }
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['transaction' => $e->getMessage()]);
         }
 
         return back();
@@ -171,6 +218,7 @@ class FinanceController extends Controller
             'task_id' => ['nullable', 'integer', 'exists:tasks,id'],
             'advance_id' => ['nullable', 'integer', 'exists:advances,id'],
             'debit_account' => ['nullable', Rule::in(['wallet', 'advance', 'unassigned'])],
+            'occurred_at' => ['nullable', 'date'],
             'receipts' => ['nullable', 'array'],
             'receipts.*' => ['file', 'max:20480'],
         ]);
@@ -206,6 +254,7 @@ class FinanceController extends Controller
             'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'task_id' => ['nullable', 'integer', 'exists:tasks,id'],
             'debit_account' => ['sometimes', Rule::in(['wallet', 'advance', 'unassigned'])],
+            'occurred_at' => ['nullable', 'date'],
         ]);
 
         try {

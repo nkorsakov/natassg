@@ -27,6 +27,7 @@ class WalletTransaction extends Model
         'advance_id',
         'expense_id',
         'meta',
+        'occurred_at',
         'is_demo',
     ];
 
@@ -35,6 +36,7 @@ class WalletTransaction extends Model
         return [
             'meta' => 'array',
             'is_demo' => 'boolean',
+            'occurred_at' => 'datetime',
         ];
     }
 

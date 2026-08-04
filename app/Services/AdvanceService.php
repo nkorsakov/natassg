@@ -308,6 +308,61 @@ class AdvanceService
         return app(ExpenseService::class)->detachFromAdvance($advance, $expense);
     }
 
+    public function destroy(Advance $advance): void
+    {
+        DB::transaction(function () use ($advance) {
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['expenses.receipts', 'user'])->firstOrFail();
+            $owner = $advance->user;
+            $wallet = \App\Models\Wallet::query()->firstOrCreate(
+                ['user_id' => $owner->id],
+                ['balance_minor' => 0, 'currency' => 'RUB'],
+            );
+            $wallet = \App\Models\Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+
+            $expenseIds = $advance->expenses->pluck('id')->all();
+
+            $txs = WalletTransaction::query()
+                ->where(function ($q) use ($advance, $expenseIds) {
+                    $q->where('advance_id', $advance->id);
+                    if ($expenseIds !== []) {
+                        $q->orWhereIn('expense_id', $expenseIds);
+                    }
+                })
+                ->lockForUpdate()
+                ->get();
+
+            $walletDelta = 0;
+            foreach ($txs as $tx) {
+                if ($tx->account === WalletTransaction::ACCOUNT_WALLET) {
+                    $walletDelta -= (int) $tx->amount_minor;
+                }
+            }
+            if ($walletDelta !== 0) {
+                $wallet->increment('balance_minor', $walletDelta);
+            }
+
+            foreach ($advance->expenses as $expense) {
+                foreach ($expense->receipts as $receipt) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($receipt->path);
+                    $receipt->delete();
+                }
+            }
+
+            WalletTransaction::query()
+                ->where(function ($q) use ($advance, $expenseIds) {
+                    $q->where('advance_id', $advance->id);
+                    if ($expenseIds !== []) {
+                        $q->orWhereIn('expense_id', $expenseIds);
+                    }
+                })
+                ->delete();
+
+            \App\Models\Expense::query()->where('advance_id', $advance->id)->delete();
+            $advance->tasks()->detach();
+            $advance->delete();
+        });
+    }
+
     protected function markClosed(Advance $advance): void
     {
         $advance->status_id = DictionaryResolver::advanceStatusId('closed');

@@ -302,6 +302,20 @@ export function useSkyDeskStore() {
         debouncedPut(`advance-${id}`, `/advances/${id}`, patch);
     };
 
+    const removeAdvance = (advanceId) => {
+        router.delete(`/advances/${advanceId}`, visitOpts);
+    };
+
+    const removeTransaction = (transactionId) => {
+        router.delete(`/wallet/transactions/${transactionId}`, {
+            ...visitOpts,
+            onError: (errors) => {
+                const msg = errors?.transaction;
+                if (msg) window.alert(Array.isArray(msg) ? msg[0] : msg);
+            },
+        });
+    };
+
     const addExpense = (advanceId, payload = {}) => {
         const body = {
             amount: Number(payload.amount) || 0,
@@ -310,6 +324,7 @@ export function useSkyDeskStore() {
             supplier_id: payload.supplier_id || null,
             task_id: payload.task_id ?? null,
             debit_account: payload.debit_account || (advanceId ? 'advance' : 'unassigned'),
+            occurred_at: payload.occurred_at || null,
         };
         const receipts = Array.isArray(payload.receipts) ? payload.receipts.filter(Boolean) : [];
         const opts = receipts.length ? { ...visitOpts, forceFormData: true } : visitOpts;
@@ -358,6 +373,7 @@ export function useSkyDeskStore() {
             note: payload.note || '',
             title: payload.title || '',
             disbursement_method_id: payload.disbursement_method_id || null,
+            occurred_at: payload.occurred_at || null,
         }, visitOpts);
     };
 
@@ -367,6 +383,7 @@ export function useSkyDeskStore() {
             note: payload.note || '',
             title: payload.title || '',
             disbursement_method_id: payload.disbursement_method_id || null,
+            occurred_at: payload.occurred_at || null,
         }, visitOpts);
     };
 
@@ -520,6 +537,8 @@ export function useSkyDeskStore() {
         updateEvent,
         createAdvance,
         updateAdvance,
+        removeAdvance,
+        removeTransaction,
         addExpense,
         updateExpense,
         removeExpense,

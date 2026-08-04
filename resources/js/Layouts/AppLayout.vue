@@ -29,6 +29,8 @@ const {
     eventId,
     advanceOpen,
     advanceId,
+    advanceCreating,
+    advanceCreatePrefill,
     contactOpen,
     contactId,
     quickCreateOpen,
@@ -36,9 +38,23 @@ const {
     openTask,
     openEvent,
     openAdvance,
+    openAdvanceCreate,
     openContact,
     openQuickCreate,
 } = useWorkspaceUi();
+
+const onAdvanceCreated = (id) => {
+    advanceCreating.value = false;
+    advanceCreatePrefill.value = {};
+    advanceId.value = id;
+};
+
+const onAdvanceDeleted = () => {
+    advanceCreating.value = false;
+    advanceCreatePrefill.value = {};
+    advanceId.value = null;
+    advanceOpen.value = false;
+};
 const page = usePage();
 const drawer = ref(true);
 
@@ -96,7 +112,7 @@ const onEventCreateTask = (eventIdForLink) => {
     openQuickCreate(eventIdForLink);
 };
 
-defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
+defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, openContact });
 </script>
 
 <template>
@@ -317,6 +333,7 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
             @open-task="openTask"
             @open-event="openEvent"
             @open-advance="openAdvance"
+            @open-advance-create="openAdvanceCreate"
         />
         <EventDetailDialog
             v-model="eventOpen"
@@ -327,7 +344,11 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openContact });
         <AdvanceDetailDialog
             v-model="advanceOpen"
             :advance-id="advanceId"
+            :creating="advanceCreating"
+            :create-prefill="advanceCreatePrefill"
             @open-task="openTask"
+            @created="onAdvanceCreated"
+            @deleted="onAdvanceDeleted"
         />
         <ContactDetailDialog
             v-model="contactOpen"

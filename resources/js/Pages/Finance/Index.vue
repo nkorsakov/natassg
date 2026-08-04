@@ -9,7 +9,7 @@ import { dictChipStyle } from '@/utils/dictColor';
 import { prepareUploadFile } from '@/utils/compressImage';
 
 const store = useSkyDeskStore();
-const { openAdvance, openTask } = useWorkspaceUi();
+const { openAdvance, openAdvanceCreate, openTask } = useWorkspaceUi();
 const { isAdmin } = useIsAdmin();
 
 const tab = ref('movement');
@@ -26,6 +26,7 @@ const topUpForm = reactive({
     amount: '',
     note: '',
     disbursement_method_id: null,
+    occurred_at: '',
 });
 const expenseForm = reactive({
     amount: '',
@@ -35,7 +36,26 @@ const expenseForm = reactive({
     debit_account: 'unassigned',
     advance_id: null,
     pendingReceipts: [],
+    occurred_at: '',
 });
+
+const todayIsoDate = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
+const formatTxDate = (value) => {
+    const raw = String(value || '');
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+    if (!raw) return '—';
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('ru-RU');
+};
 
 const filters = [
     { value: 'all', label: 'Все' },
@@ -97,7 +117,15 @@ const summary = computed(() => {
     ];
 });
 
-const transactions = computed(() => store.wallet.value.transactions || []);
+const transactions = computed(() => {
+    const list = [...(store.wallet.value.transactions || [])];
+    return list.sort((a, b) => {
+        const da = String(a.occurred_at || a.created_at || '');
+        const db = String(b.occurred_at || b.created_at || '');
+        if (da !== db) return db.localeCompare(da);
+        return Number(b.id) - Number(a.id);
+    });
+});
 
 const methodItems = computed(() => store.dictionaries.value.disbursementMethods || []);
 
@@ -113,6 +141,7 @@ const resetTopUpForm = () => {
     topUpForm.amount = '';
     topUpForm.note = '';
     topUpForm.disbursement_method_id = methodItems.value[0]?.id || null;
+    topUpForm.occurred_at = todayIsoDate();
     editingTopUpId.value = null;
 };
 
@@ -128,6 +157,7 @@ const resetExpenseForm = () => {
     expenseForm.debit_account = 'unassigned';
     expenseForm.advance_id = null;
     expenseForm.pendingReceipts = [];
+    expenseForm.occurred_at = todayIsoDate();
     editingExpenseId.value = null;
 };
 
@@ -141,13 +171,12 @@ const openExpenseCreate = () => {
     showExpense.value = true;
 };
 
-const createAdvance = async () => {
-    const adv = await store.createAdvance({
+const createAdvance = () => {
+    openAdvanceCreate({
         title: '',
         amount: 0,
         status_id: 'pending',
     });
-    if (adv?.id) openAdvance(adv.id);
 };
 
 const submitTopUp = () => {
@@ -161,6 +190,7 @@ const submitTopUp = () => {
         note: topUpForm.note,
         title: topUpForm.title,
         disbursement_method_id: topUpForm.disbursement_method_id,
+        occurred_at: topUpForm.occurred_at || todayIsoDate(),
     };
     if (editingTopUpId.value) {
         store.updateTopUp(editingTopUpId.value, payload);
@@ -212,6 +242,7 @@ const submitExpense = () => {
         debit_account: expenseForm.debit_account === 'advance' ? 'advance' : expenseForm.debit_account,
         advance_id: expenseForm.debit_account === 'advance' ? expenseForm.advance_id : null,
         receipts: expenseForm.pendingReceipts,
+        occurred_at: expenseForm.occurred_at || todayIsoDate(),
     };
     if (editingExpenseId.value) {
         store.updateExpense(editingExpenseId.value, {
@@ -220,6 +251,7 @@ const submitExpense = () => {
             article_id: payload.article_id,
             supplier_id: payload.supplier_id,
             debit_account: payload.debit_account,
+            occurred_at: payload.occurred_at,
         });
     } else if (payload.advance_id) {
         store.addExpense(payload.advance_id, payload);
@@ -245,6 +277,7 @@ const openExpenseEditor = (expenseId) => {
     expenseForm.debit_account = expense.debit_account || 'unassigned';
     expenseForm.advance_id = null;
     expenseForm.pendingReceipts = [];
+    expenseForm.occurred_at = expense.occurred_at || todayIsoDate();
     showExpense.value = true;
 };
 
@@ -254,7 +287,16 @@ const openTopUpEditor = (tx) => {
     topUpForm.amount = Math.abs(Number(tx.amount));
     topUpForm.note = tx.meta?.note || '';
     topUpForm.disbursement_method_id = tx.meta?.disbursement_method_id || methodItems.value[0]?.id || null;
+    topUpForm.occurred_at = tx.occurred_at || todayIsoDate();
     showTopUp.value = true;
+};
+
+const deleteEditingTopUp = () => {
+    if (!editingTopUpId.value) return;
+    if (!window.confirm('Удалить эту операцию? Баланс будет скорректирован.')) return;
+    store.removeTransaction(editingTopUpId.value);
+    showTopUp.value = false;
+    resetTopUpForm();
 };
 
 const onTransactionClick = (tx) => {
@@ -276,6 +318,15 @@ const isClickableTx = (tx) =>
     || (tx.type === 'income' && tx.account === 'wallet')
     || (tx.type === 'expense' && !!tx.expense_id);
 
+const canDeleteTx = (tx) =>
+    (tx.type === 'income' && tx.account === 'wallet')
+    || (tx.type === 'expense' && !!tx.expense_id);
+
+const deleteTx = (tx) => {
+    if (!window.confirm('Удалить эту операцию? Баланс будет скорректирован.')) return;
+    store.removeTransaction(tx.id);
+};
+
 const taskLabel = (adv) => {
     const ids = adv.task_ids?.length ? adv.task_ids : (adv.task_id ? [adv.task_id] : []);
     return ids;
@@ -284,8 +335,7 @@ const taskLabel = (adv) => {
 const txSubtitle = (tx) => {
     const type = txTypeLabels[tx.type] || tx.type;
     const account = accountLabels[tx.account] || tx.account;
-    const when = tx.created_at ? new Date(tx.created_at).toLocaleString('ru-RU') : '';
-    return `${type} · ${account} · ${when}`;
+    return `${type} · ${account}`;
 };
 
 const wallet = computed(() => store.wallet.value);
@@ -361,14 +411,17 @@ const wallet = computed(() => store.wallet.value);
                 <div
                     v-for="tx in transactions"
                     :key="tx.id"
-                    class="d-flex justify-space-between py-2"
+                    class="d-flex align-start ga-3 py-2"
                     :style="{
                         borderBottom: '1px solid rgba(var(--v-border-color),var(--v-border-opacity))',
                         cursor: isClickableTx(tx) ? 'pointer' : 'default',
                     }"
                     @click="isClickableTx(tx) && onTransactionClick(tx)"
                 >
-                    <div class="min-w-0 pe-3">
+                    <div class="text-body-2 font-weight-bold text-no-wrap" style="min-width:5.5rem">
+                        {{ formatTxDate(tx.occurred_at || tx.created_at) }}
+                    </div>
+                    <div class="min-w-0 flex-grow-1 pe-2">
                         <div class="text-body-2 font-weight-bold text-truncate">{{ tx.title || txTypeLabels[tx.type] || tx.type }}</div>
                         <div class="text-caption text-medium-emphasis">{{ txSubtitle(tx) }}</div>
                     </div>
@@ -378,6 +431,17 @@ const wallet = computed(() => store.wallet.value);
                     >
                         {{ Number(tx.amount) > 0 ? '+' : '' }}{{ store.formatMoney(tx.amount) }}
                     </div>
+                    <v-btn
+                        v-if="canDeleteTx(tx)"
+                        icon
+                        variant="text"
+                        size="x-small"
+                        color="error"
+                        aria-label="Удалить"
+                        @click.stop="deleteTx(tx)"
+                    >
+                        <v-icon size="16">mdi-delete-outline</v-icon>
+                    </v-btn>
                 </div>
             </v-card>
         </div>
@@ -466,6 +530,12 @@ const wallet = computed(() => store.wallet.value);
                 </h3>
                 <v-text-field v-model="topUpForm.title" label="Название" class="mb-2" />
                 <v-text-field v-model="topUpForm.amount" type="number" label="Сумма, ₽" min="0" class="mb-2" />
+                <v-text-field
+                    v-model="topUpForm.occurred_at"
+                    type="date"
+                    label="Дата"
+                    class="mb-2"
+                />
                 <v-select
                     v-model="topUpForm.disbursement_method_id"
                     :items="methodItems"
@@ -475,11 +545,21 @@ const wallet = computed(() => store.wallet.value);
                     class="mb-2"
                 />
                 <v-text-field v-model="topUpForm.note" label="Комментарий" class="mb-3" />
-                <div class="d-flex justify-end ga-2">
-                    <v-btn variant="text" @click="showTopUp = false; resetTopUpForm()">Отмена</v-btn>
-                    <v-btn color="primary" @click="submitTopUp">
-                        {{ editingTopUpId ? 'Сохранить' : 'Записать' }}
+                <div class="d-flex justify-space-between ga-2">
+                    <v-btn
+                        v-if="editingTopUpId"
+                        variant="text"
+                        color="error"
+                        @click="deleteEditingTopUp"
+                    >
+                        Удалить
                     </v-btn>
+                    <div class="d-flex justify-end ga-2 flex-grow-1">
+                        <v-btn variant="text" @click="showTopUp = false; resetTopUpForm()">Отмена</v-btn>
+                        <v-btn color="primary" @click="submitTopUp">
+                            {{ editingTopUpId ? 'Сохранить' : 'Записать' }}
+                        </v-btn>
+                    </div>
                 </div>
             </v-card>
         </v-dialog>
@@ -494,6 +574,12 @@ const wallet = computed(() => store.wallet.value);
                     {{ editingExpenseId ? 'Редактировать расход' : 'Расход' }}
                 </h3>
                 <v-text-field v-model="expenseForm.amount" type="number" label="Сумма, ₽" min="0" class="mb-2" />
+                <v-text-field
+                    v-model="expenseForm.occurred_at"
+                    type="date"
+                    label="Дата"
+                    class="mb-2"
+                />
                 <v-select
                     v-model="expenseForm.article_id"
                     :items="store.dictionaries.value.expenseArticles"

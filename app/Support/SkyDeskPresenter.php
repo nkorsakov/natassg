@@ -119,6 +119,7 @@ class SkyDeskPresenter
             $wallet->load([
                 'transactions' => fn ($q) => $q
                     ->with(['advance', 'expense.article', 'expense.supplier'])
+                    ->orderByDesc('occurred_at')
                     ->orderByDesc('id')
                     ->limit(100),
             ]);
@@ -267,6 +268,17 @@ class SkyDeskPresenter
     public static function expense(Expense $expense): array
     {
         $expense->loadMissing(['receipts', 'article', 'supplier']);
+        $occurredAt = WalletTransaction::query()
+            ->where('expense_id', $expense->id)
+            ->where('type', WalletTransaction::TYPE_EXPENSE)
+            ->orderByDesc('id')
+            ->get()
+            ->first(function (WalletTransaction $tx) {
+                $meta = is_array($tx->meta) ? $tx->meta : [];
+
+                return ($meta['reason'] ?? null) !== 'expense_reverse';
+            })
+            ?->occurred_at;
 
         return [
             'id' => $expense->id,
@@ -277,6 +289,7 @@ class SkyDeskPresenter
             'supplier_id' => $expense->supplier_id,
             'amount' => DictionaryResolver::minorToRubles((int) $expense->amount_minor),
             'description' => $expense->description ?? '',
+            'occurred_at' => optional($occurredAt)?->toDateString(),
             'receipt_ids' => $expense->receipts->pluck('id')->values(),
             'receipts' => $expense->receipts->map(fn ($r) => self::receipt($r, $expense->id))->values(),
         ];
@@ -375,6 +388,7 @@ class SkyDeskPresenter
                     'advance_id' => $tx->advance_id,
                     'expense_id' => $tx->expense_id,
                     'meta' => $tx->meta,
+                    'occurred_at' => optional($tx->occurred_at ?? $tx->created_at)?->toDateString(),
                     'created_at' => optional($tx->created_at)?->toIso8601String(),
                 ])->values();
         }

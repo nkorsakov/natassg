@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class FinanceLedger
 {
     /**
-     * @param  array{advance_id?: int|null, expense_id?: int|null, meta?: array|null, account?: string}  $links
+     * @param  array{advance_id?: int|null, expense_id?: int|null, meta?: array|null, occurred_at?: mixed}  $links
      */
     public function apply(
         User $user,
@@ -34,6 +36,7 @@ class FinanceLedger
                 'advance_id' => $links['advance_id'] ?? null,
                 'expense_id' => $links['expense_id'] ?? null,
                 'meta' => $links['meta'] ?? null,
+                'occurred_at' => $this->resolveOccurredAt($links['occurred_at'] ?? null),
             ]);
 
             // Only wallet-account movements change stored wallet balance.
@@ -43,6 +46,23 @@ class FinanceLedger
 
             return $tx;
         });
+    }
+
+    public function resolveOccurredAt(mixed $value): Carbon
+    {
+        if ($value instanceof Carbon) {
+            return $value->copy()->startOfDay();
+        }
+
+        if ($value === null || $value === '') {
+            return now()->startOfDay();
+        }
+
+        try {
+            return Carbon::parse((string) $value)->startOfDay();
+        } catch (\Throwable) {
+            throw new InvalidArgumentException('Некорректная дата операции');
+        }
     }
 
     public function hasIncomeForAdvance(int $advanceId): bool

@@ -6,6 +6,8 @@ const eventOpen = ref(false);
 const eventId = ref(null);
 const advanceOpen = ref(false);
 const advanceId = ref(null);
+const advanceCreating = ref(false);
+const advanceCreatePrefill = ref({});
 const contactOpen = ref(false);
 const contactId = ref(null);
 const quickCreateOpen = ref(false);
@@ -23,7 +25,16 @@ export function useWorkspaceUi() {
     };
 
     const openAdvance = (id) => {
+        advanceCreating.value = false;
+        advanceCreatePrefill.value = {};
         advanceId.value = id;
+        advanceOpen.value = true;
+    };
+
+    const openAdvanceCreate = (prefill = {}) => {
+        advanceId.value = null;
+        advanceCreating.value = true;
+        advanceCreatePrefill.value = { ...prefill };
         advanceOpen.value = true;
     };
 
@@ -44,6 +55,8 @@ export function useWorkspaceUi() {
         eventId,
         advanceOpen,
         advanceId,
+        advanceCreating,
+        advanceCreatePrefill,
         contactOpen,
         contactId,
         quickCreateOpen,
@@ -51,6 +64,7 @@ export function useWorkspaceUi() {
         openTask,
         openEvent,
         openAdvance,
+        openAdvanceCreate,
         openContact,
         openQuickCreate,
     };

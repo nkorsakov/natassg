@@ -44,8 +44,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
     Route::post('/wallet/topups', [FinanceController::class, 'topUp'])->name('wallet.topups');
     Route::put('/wallet/topups/{transaction}', [FinanceController::class, 'updateTopUp'])->name('wallet.topups.update');
+    Route::delete('/wallet/transactions/{transaction}', [FinanceController::class, 'destroyTransaction'])->name('wallet.transactions.destroy');
     Route::post('/advances', [FinanceController::class, 'storeAdvance'])->name('advances.store');
     Route::put('/advances/{advance}', [FinanceController::class, 'updateAdvance'])->name('advances.update');
+    Route::delete('/advances/{advance}', [FinanceController::class, 'destroyAdvance'])->name('advances.destroy');
     Route::post('/advances/{advance}/close-to-wallet', [FinanceController::class, 'closeToWallet'])->name('advances.close-to-wallet');
     Route::post('/advances/{advance}/close-writeoff', [FinanceController::class, 'closeWriteOff'])->name('advances.close-writeoff');
     Route::post('/advances/{advance}/expenses', [FinanceController::class, 'storeExpense'])->name('advances.expenses.store');

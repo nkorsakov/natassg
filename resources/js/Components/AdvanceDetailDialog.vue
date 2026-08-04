@@ -10,8 +10,10 @@ import OwnerBadge from '@/Components/OwnerBadge.vue';
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
     advanceId: { type: [String, Number], default: null },
+    creating: { type: Boolean, default: false },
+    createPrefill: { type: Object, default: () => ({}) },
 });
-const emit = defineEmits(['open-task']);
+const emit = defineEmits(['open-task', 'created', 'deleted']);
 
 const { mdAndUp } = useDisplay();
 const store = useSkyDeskStore();
@@ -22,9 +24,11 @@ const uploadingReceipt = ref(false);
 const previewReceipt = ref(null);
 const titleInput = ref(null);
 const skipWatch = ref(false);
+const savingCreate = ref(false);
 
+const isCreating = computed(() => props.creating || !props.advanceId);
 const advance = computed(() => (props.advanceId ? store.getAdvance(props.advanceId) : null));
-const expenseList = computed(() =>
+const showDialog = computed(() => !!advance.value || isCreating.value);const expenseList = computed(() =>
     props.advanceId ? store.expensesForAdvance(props.advanceId) : [],
 );
 const statusItems = computed(() => store.dictionaries.value.advanceStatuses || []);
@@ -60,10 +64,16 @@ const expenseDraft = reactive({
     article_id: null,
     supplier_id: null,
     receipts: [],
+    occurred_at: '',
 });
 
 const draftReceiptInput = ref(null);
 const uploadingDraftReceipt = ref(false);
+
+const todayIsoDate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const isDraftTitle = (title) => {
     const t = String(title || '').trim();
@@ -93,10 +103,34 @@ const accountLabel = (account) => ({
 }[account] || account);
 
 watch(
-    () => [model.value, props.advanceId],
+    () => [model.value, props.advanceId, props.creating],
     async () => {
-        if (!model.value || !advance.value) return;
+        if (!model.value) return;
         skipWatch.value = true;
+        if (isCreating.value) {
+            const prefill = props.createPrefill || {};
+            form.title = prefill.title || '';
+            form.amount = prefill.amount != null && Number(prefill.amount) ? prefill.amount : '';
+            form.status_id = prefill.status_id || 'pending';
+            form.task_ids = [...(prefill.task_ids || (prefill.task_id ? [prefill.task_id] : []))];
+            form.disbursement_method_id = prefill.disbursement_method_id || null;
+            form.note = prefill.note || '';
+            expenseDraft.amount = '';
+            expenseDraft.description = '';
+            expenseDraft.article_id = articleItems.value[0]?.id || null;
+            expenseDraft.supplier_id = null;
+            expenseDraft.receipts = [];
+            expenseDraft.occurred_at = todayIsoDate();
+            await nextTick();
+            skipWatch.value = false;
+            const el = titleInput.value?.$el?.querySelector?.('input');
+            el?.focus?.();
+            return;
+        }
+        if (!advance.value) {
+            skipWatch.value = false;
+            return;
+        }
         const draftTitle = isDraftTitle(advance.value.title);
         const draftAmount = !Number(advance.value.amount);
         form.title = draftTitle ? '' : advance.value.title;
@@ -110,6 +144,7 @@ watch(
         expenseDraft.article_id = articleItems.value[0]?.id || null;
         expenseDraft.supplier_id = null;
         expenseDraft.receipts = [];
+        expenseDraft.occurred_at = todayIsoDate();
         await nextTick();
         skipWatch.value = false;
         if (draftTitle || draftAmount) {
@@ -123,7 +158,7 @@ watch(
 watch(
     form,
     () => {
-        if (skipWatch.value || !model.value || !props.advanceId) return;
+        if (skipWatch.value || !model.value || isCreating.value || !props.advanceId) return;
 
         if (form.status_id === 'received') {
             if (!(Number(form.amount) > 0)) {
@@ -184,6 +219,50 @@ watch(
     { deep: true },
 );
 
+const saveCreate = async () => {
+    if (savingCreate.value) return;
+    if (form.status_id === 'received') {
+        if (!(Number(form.amount) > 0)) {
+            window.alert('Перед получением укажите сумму больше нуля.');
+            return;
+        }
+        if (!form.disbursement_method_id) {
+            window.alert('Укажите способ выдачи (перевод / наличка).');
+            return;
+        }
+    }
+    savingCreate.value = true;
+    try {
+        const adv = await store.createAdvance({
+            title: form.title.trim(),
+            amount: Number(form.amount) || 0,
+            status_id: form.status_id || 'pending',
+            task_ids: form.task_ids,
+            disbursement_method_id: form.disbursement_method_id,
+            note: form.note,
+        });
+        if (adv?.id) {
+            emit('created', adv.id);
+        } else {
+            model.value = false;
+        }
+    } finally {
+        savingCreate.value = false;
+    }
+};
+
+const removeAdvance = () => {
+    if (!props.advanceId) return;
+    if (!window.confirm('Удалить заявку на аванс и связанные проводки?')) return;
+    store.removeAdvance(props.advanceId);
+    emit('deleted');
+    model.value = false;
+};
+
+const closeDialog = () => {
+    model.value = false;
+};
+
 const addExpense = async () => {
     const amount = Number(expenseDraft.amount);
     if (!amount || !expenseDraft.article_id) {
@@ -202,11 +281,13 @@ const addExpense = async () => {
         supplier_id: expenseDraft.supplier_id || null,
         debit_account: 'advance',
         receipts,
+        occurred_at: expenseDraft.occurred_at || todayIsoDate(),
     });
     expenseDraft.amount = '';
     expenseDraft.description = '';
     expenseDraft.supplier_id = null;
     expenseDraft.receipts = [];
+    expenseDraft.occurred_at = todayIsoDate();
 };
 
 const onDraftReceiptsSelected = async (event) => {
@@ -316,17 +397,17 @@ const openFirstTask = () => {
         :max-width="mdAndUp ? 720 : undefined"
         scrollable
     >
-        <v-card v-if="advance" class="d-flex flex-column" :style="mdAndUp ? 'max-height:90vh' : 'min-height:100%'">
+        <v-card v-if="showDialog" class="d-flex flex-column" :style="mdAndUp ? 'max-height:90vh' : 'min-height:100%'">
             <v-card-title class="d-flex align-center justify-space-between px-6 pt-5">
                 <div>
                     <div class="text-caption text-medium-emphasis mb-1 d-flex align-center ga-2">
                         Аванс
-                        <OwnerBadge :show="isAdmin" :user="advance.user" />
-                        <span v-if="isAdmin && advance.user?.name">{{ advance.user.name }}</span>
+                        <OwnerBadge :show="isAdmin && !isCreating" :user="advance?.user" />
+                        <span v-if="isAdmin && !isCreating && advance?.user?.name">{{ advance.user.name }}</span>
                     </div>
-                    <span class="text-h6 font-weight-bold">Заявка</span>
+                    <span class="text-h6 font-weight-bold">{{ isCreating ? 'Новая заявка' : 'Заявка' }}</span>
                 </div>
-                <v-btn icon variant="tonal" size="small" @click="model = false">
+                <v-btn icon variant="tonal" size="small" @click="closeDialog">
                     <v-icon>mdi-close</v-icon>
                 </v-btn>
             </v-card-title>
@@ -398,6 +479,7 @@ const openFirstTask = () => {
                 </v-row>
                 <v-textarea v-model="form.note" label="Комментарий" rows="2" hide-details class="mb-3" />
 
+                <template v-if="!isCreating">
                 <div class="skydesk-accent-panel pa-4 mb-4">
                     <div class="d-flex justify-space-between text-body-2 mb-1">
                         <span>Потрачено</span>
@@ -553,6 +635,9 @@ const openFirstTask = () => {
                             <v-text-field v-model="expenseDraft.amount" type="number" label="Сумма" density="compact" hide-details />
                         </v-col>
                         <v-col cols="12" sm="4">
+                            <v-text-field v-model="expenseDraft.occurred_at" type="date" label="Дата" density="compact" hide-details />
+                        </v-col>
+                        <v-col cols="12" sm="4">
                             <v-select
                                 v-model="expenseDraft.article_id"
                                 :items="articleItems"
@@ -563,7 +648,7 @@ const openFirstTask = () => {
                                 hide-details
                             />
                         </v-col>
-                        <v-col cols="12" sm="4">
+                        <v-col cols="12" sm="6">
                             <v-select
                                 v-model="expenseDraft.supplier_id"
                                 :items="supplierItems"
@@ -575,7 +660,7 @@ const openFirstTask = () => {
                                 clearable
                             />
                         </v-col>
-                        <v-col cols="12">
+                        <v-col cols="12" sm="6">
                             <v-text-field v-model="expenseDraft.description" label="Описание" density="compact" hide-details />
                         </v-col>
                     </v-row>
@@ -639,6 +724,32 @@ const openFirstTask = () => {
                 >
                     Открыть поручение →
                 </v-btn>
+                </template>
+
+                <div class="d-flex justify-space-between align-center ga-2 mt-4">
+                    <v-btn
+                        v-if="!isCreating"
+                        variant="text"
+                        color="error"
+                        @click="removeAdvance"
+                    >
+                        Удалить заявку
+                    </v-btn>
+                    <div v-else />
+                    <div class="d-flex ga-2">
+                        <v-btn variant="text" @click="closeDialog">
+                            {{ isCreating ? 'Отмена' : 'Закрыть' }}
+                        </v-btn>
+                        <v-btn
+                            v-if="isCreating"
+                            color="primary"
+                            :loading="savingCreate"
+                            @click="saveCreate"
+                        >
+                            Сохранить
+                        </v-btn>
+                    </div>
+                </div>
             </v-card-text>
         </v-card>
 
