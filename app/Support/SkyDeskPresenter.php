@@ -262,6 +262,9 @@ class SkyDeskPresenter
             'remaining' => DictionaryResolver::minorToRubles(max(0, $remainingMinor)),
             'remaining_minor' => max(0, $remainingMinor),
             'expenses' => $advance->expenses->map(fn ($e) => self::expense($e))->values(),
+            'issued_at' => optional($advance->issued_at)?->toDateString(),
+            'closed_at' => optional($advance->closed_at)?->toDateString(),
+            'created_at' => optional($advance->created_at)?->toDateString(),
         ];
     }
 

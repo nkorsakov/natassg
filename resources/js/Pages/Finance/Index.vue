@@ -92,8 +92,15 @@ const openAdvanceItems = computed(() =>
 );
 
 const visibleAdvances = computed(() => {
-    if (filter.value === 'all') return store.advances.value;
-    return store.advances.value.filter((a) => a.status_id === filter.value);
+    const list = filter.value === 'all'
+        ? [...store.advances.value]
+        : store.advances.value.filter((a) => a.status_id === filter.value);
+    return list.sort((a, b) => {
+        const da = String(a.issued_at || a.created_at || '');
+        const db = String(b.issued_at || b.created_at || '');
+        if (da !== db) return db.localeCompare(da);
+        return Number(b.id) - Number(a.id);
+    });
 });
 
 const summary = computed(() => {
@@ -318,15 +325,6 @@ const isClickableTx = (tx) =>
     || (tx.type === 'income' && tx.account === 'wallet')
     || (tx.type === 'expense' && !!tx.expense_id);
 
-const canDeleteTx = (tx) =>
-    (tx.type === 'income' && tx.account === 'wallet')
-    || (tx.type === 'expense' && !!tx.expense_id);
-
-const deleteTx = (tx) => {
-    if (!window.confirm('Удалить эту операцию? Баланс будет скорректирован.')) return;
-    store.removeTransaction(tx.id);
-};
-
 const taskLabel = (adv) => {
     const ids = adv.task_ids?.length ? adv.task_ids : (adv.task_id ? [adv.task_id] : []);
     return ids;
@@ -431,17 +429,6 @@ const wallet = computed(() => store.wallet.value);
                     >
                         {{ Number(tx.amount) > 0 ? '+' : '' }}{{ store.formatMoney(tx.amount) }}
                     </div>
-                    <v-btn
-                        v-if="canDeleteTx(tx)"
-                        icon
-                        variant="text"
-                        size="x-small"
-                        color="error"
-                        aria-label="Удалить"
-                        @click.stop="deleteTx(tx)"
-                    >
-                        <v-icon size="16">mdi-delete-outline</v-icon>
-                    </v-btn>
                 </div>
             </v-card>
         </div>
@@ -480,10 +467,13 @@ const wallet = computed(() => store.wallet.value);
                 <div
                     v-for="adv in visibleAdvances"
                     :key="adv.id"
-                    class="d-flex align-center ga-3 px-5 py-4 skydesk-task"
+                    class="d-flex align-start ga-3 px-5 py-4 skydesk-task"
                     style="cursor:pointer;border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
                     @click="openAdvance(adv.id)"
                 >
+                    <div class="text-body-2 font-weight-bold text-no-wrap" style="min-width:5.5rem">
+                        {{ formatTxDate(adv.issued_at || adv.created_at) }}
+                    </div>
                     <div class="flex-grow-1 min-w-0">
                         <div class="d-flex align-center ga-2">
                             <div class="text-body-1 font-weight-bold text-truncate">{{ adv.title || 'Без названия' }}</div>

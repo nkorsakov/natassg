@@ -217,13 +217,31 @@ bring_up() {
 }
 trap bring_up EXIT
 
+# Pull first so errors/503 exists before we prerender the maintenance stub.
+GIT_DONE=0
+for s in "${SELECTED[@]}"; do
+  if [[ "$s" == "git" ]]; then
+    run_git
+    GIT_DONE=1
+    break
+  fi
+done
+
 if need_maintenance "${SELECTED[@]}"; then
-  echo "==> Maintenance mode"
-  "$PHP_BIN" artisan down --retry=60 --secret="deploying" || true
+  echo "==> Maintenance mode (stub page for users)"
+  # Pre-renders errors/503.blade.php into storage/framework/down — works even while Vite rebuilds.
+  "$PHP_BIN" artisan down \
+    --retry=60 \
+    --refresh=20 \
+    --secret="deploying" \
+    --render="errors.503" || true
   MAINT=1
 fi
 
 for s in "${SELECTED[@]}"; do
+  if [[ "$s" == "git" && "$GIT_DONE" -eq 1 ]]; then
+    continue
+  fi
   run_step "$s"
 done
 
