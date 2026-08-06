@@ -30,43 +30,45 @@ const pinError = computed(() => form.errors.pin || '');
 
 const formatMoney = (n) => `${Number(n || 0).toLocaleString('ru-RU')} ₽`;
 
-const tiles = computed(() => {
-    const w = props.finance?.wallet || {};
-    return [
-        {
-            key: 'on_hand',
-            label: 'На руках',
-            value: formatMoney(w.on_hand),
-            color: '#6957EE',
-            bg: 'rgba(105, 87, 238, 0.12)',
-            icon: 'mdi-hand-coin-outline',
-        },
-        {
-            key: 'wallet',
-            label: 'Кошелёк',
-            value: formatMoney(w.wallet),
-            color: '#5B8DEF',
-            bg: 'rgba(91, 141, 239, 0.14)',
-            icon: 'mdi-wallet-outline',
-        },
-        {
-            key: 'advances',
-            label: 'В авансах',
-            value: formatMoney(w.in_advances),
-            color: '#0D9488',
-            bg: 'rgba(13, 148, 136, 0.14)',
-            icon: 'mdi-cash-multiple',
-        },
-        {
-            key: 'unassigned',
-            label: 'Не разнесено',
-            value: formatMoney(w.unassigned),
-            color: '#E96667',
-            bg: 'rgba(233, 102, 103, 0.14)',
-            icon: 'mdi-help-circle-outline',
-        },
-    ];
-});
+const wallet = computed(() => props.finance?.wallet || {});
+
+const totalTile = computed(() => ({
+    label: 'На руках',
+    value: formatMoney(wallet.value.on_hand),
+    color: '#6957EE',
+    bg: 'rgba(105, 87, 238, 0.12)',
+    icon: 'mdi-hand-coin-outline',
+}));
+
+const partTiles = computed(() => [
+    {
+        key: 'wallet',
+        label: 'Кошелёк',
+        value: formatMoney(wallet.value.wallet),
+        color: '#5B8DEF',
+        bg: 'rgba(91, 141, 239, 0.14)',
+        icon: 'mdi-wallet-outline',
+        op: null,
+    },
+    {
+        key: 'advances',
+        label: 'В авансах',
+        value: formatMoney(wallet.value.in_advances),
+        color: '#0D9488',
+        bg: 'rgba(13, 148, 136, 0.14)',
+        icon: 'mdi-cash-multiple',
+        op: '+',
+    },
+    {
+        key: 'unassigned',
+        label: 'Не разнесено',
+        value: formatMoney(wallet.value.unassigned),
+        color: '#E96667',
+        bg: 'rgba(233, 102, 103, 0.14)',
+        icon: 'mdi-help-circle-outline',
+        op: '−',
+    },
+]);
 
 const movementTone = (tx) => {
     if (tx.type === 'income' || Number(tx.amount) > 0) return 'in';
@@ -217,20 +219,47 @@ const refresh = () => {
                             </p>
                         </header>
 
-                        <div class="cash-public__tiles mb-5">
+                        <div class="cash-public__sum mb-5">
                             <div
-                                v-for="tile in tiles"
-                                :key="tile.key"
-                                class="cash-public__tile"
-                                :style="{ '--tile-bg': tile.bg, '--tile-color': tile.color }"
+                                class="cash-public__total"
+                                :style="{ '--tile-bg': totalTile.bg, '--tile-color': totalTile.color }"
                             >
-                                <div class="cash-public__tile-icon">
-                                    <v-icon size="18" :icon="tile.icon" />
+                                <div class="cash-public__total-top">
+                                    <div class="cash-public__tile-icon cash-public__tile-icon--lg">
+                                        <v-icon size="20" :icon="totalTile.icon" />
+                                    </div>
+                                    <div class="cash-public__total-copy">
+                                        <div class="cash-public__tile-label">{{ totalTile.label }}</div>
+                                        <div class="cash-public__total-hint">
+                                            Кошелёк + В авансах − Не разнесено
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="cash-public__tile-body">
-                                    <div class="cash-public__tile-label">{{ tile.label }}</div>
-                                    <div class="cash-public__tile-value">{{ tile.value }}</div>
-                                </div>
+                                <div class="cash-public__total-value">{{ totalTile.value }}</div>
+                            </div>
+
+                            <div class="cash-public__parts" aria-label="Состав суммы на руках">
+                                <template v-for="tile in partTiles" :key="tile.key">
+                                    <div
+                                        v-if="tile.op"
+                                        class="cash-public__op"
+                                        aria-hidden="true"
+                                    >
+                                        {{ tile.op }}
+                                    </div>
+                                    <div
+                                        class="cash-public__tile"
+                                        :style="{ '--tile-bg': tile.bg, '--tile-color': tile.color }"
+                                    >
+                                        <div class="cash-public__tile-icon">
+                                            <v-icon size="18" :icon="tile.icon" />
+                                        </div>
+                                        <div class="cash-public__tile-body">
+                                            <div class="cash-public__tile-label">{{ tile.label }}</div>
+                                            <div class="cash-public__tile-value">{{ tile.value }}</div>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </div>
 
@@ -384,13 +413,71 @@ const refresh = () => {
     line-height: 1.15;
 }
 
-.cash-public__tiles {
+.cash-public__sum {
     display: flex;
     flex-direction: column;
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-    background: rgb(var(--v-theme-surface));
+    gap: 12px;
+}
+
+.cash-public__total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+    border-radius: 18px;
+    background:
+        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--tile-color) 22%, transparent), transparent 55%),
+        var(--tile-bg);
+    border: 1px solid color-mix(in srgb, var(--tile-color) 28%, transparent);
+}
+
+.cash-public__total-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.cash-public__total-copy {
+    min-width: 0;
+}
+
+.cash-public__total-hint {
+    margin-top: 2px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+.cash-public__total-value {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(1.45rem, 4vw, 1.85rem);
+    letter-spacing: -0.03em;
+    color: var(--tile-color);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.cash-public__parts {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.cash-public__op {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    flex-shrink: 0;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    color: rgba(var(--v-theme-on-surface), 0.45);
 }
 
 .cash-public__tile {
@@ -398,11 +485,11 @@ const refresh = () => {
     align-items: center;
     gap: 12px;
     padding: 14px 16px;
-    background: color-mix(in srgb, var(--tile-bg) 70%, transparent);
-    border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    border-radius: 14px;
+    background: var(--tile-bg);
+    flex: 1;
+    min-width: 0;
 }
-
-.cash-public__tile:first-child { border-top: 0; }
 
 .cash-public__tile-icon {
     width: 34px;
@@ -412,6 +499,13 @@ const refresh = () => {
     place-items: center;
     color: var(--tile-color);
     background: color-mix(in srgb, var(--tile-color) 16%, transparent);
+    flex-shrink: 0;
+}
+
+.cash-public__tile-icon--lg {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
 }
 
 .cash-public__tile-body {
@@ -420,6 +514,7 @@ const refresh = () => {
     justify-content: space-between;
     align-items: baseline;
     gap: 12px;
+    min-width: 0;
 }
 
 .cash-public__tile-label {
@@ -430,28 +525,29 @@ const refresh = () => {
 .cash-public__tile-value {
     font-family: Fraunces, Georgia, serif;
     font-weight: 700;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     color: var(--tile-color);
     font-variant-numeric: tabular-nums;
 }
 
 @media (min-width: 700px) {
-    .cash-public__tiles {
+    .cash-public__parts {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        border: 0;
-        background: transparent;
-        overflow: visible;
+        grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr);
+        align-items: stretch;
+        gap: 0;
+    }
+
+    .cash-public__op {
+        height: auto;
+        width: 28px;
+        font-size: 1.35rem;
     }
 
     .cash-public__tile {
         flex-direction: column;
         align-items: flex-start;
-        border-radius: 16px;
-        border: 0;
-        min-height: 106px;
-        background: var(--tile-bg);
+        min-height: 100px;
     }
 
     .cash-public__tile-icon {
@@ -460,12 +556,14 @@ const refresh = () => {
         background: transparent;
         margin-bottom: 8px;
         display: block;
+        padding: 0;
     }
 
     .cash-public__tile-body {
         flex-direction: column;
         align-items: flex-start;
         gap: 2px;
+        width: 100%;
     }
 }
 
