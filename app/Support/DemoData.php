@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Advance;
 use App\Models\CalendarEvent;
+use App\Models\Comment;
 use App\Models\Contact;
 use App\Models\Expense;
 use App\Models\Receipt;
@@ -114,6 +115,14 @@ class DemoData
                     }
                 })
                 ->delete();
+
+            $stats['comments'] = 0;
+            if ($demoTaskIds->isNotEmpty()) {
+                $stats['comments'] = Comment::query()
+                    ->where('commentable_type', (new Task)->getMorphClass())
+                    ->whereIn('commentable_id', $demoTaskIds)
+                    ->delete();
+            }
 
             $stats['wallet_transactions'] = WalletTransaction::query()
                 ->where('is_demo', true)

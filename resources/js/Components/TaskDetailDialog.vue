@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useDisplay } from 'vuetify';
+import { usePage } from '@inertiajs/vue3';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useIsAdmin } from '@/composables/useIsAdmin';
 import { prepareUploadFile } from '@/utils/compressImage';
@@ -17,8 +18,11 @@ const props = defineProps({
 const emit = defineEmits(['open-task', 'open-event', 'open-advance', 'open-advance-create']);
 
 const { mdAndUp } = useDisplay();
+const page = usePage();
 const store = useSkyDeskStore();
 const { isAdmin } = useIsAdmin();
+
+const authUserId = computed(() => page.props.auth?.user?.id ?? null);
 
 const confirmClose = ref(false);
 const linkEventId = ref(null);
@@ -36,6 +40,9 @@ const titleInput = ref(null);
 const previewAttachment = ref(null);
 const newReminderAt = ref('');
 const newReminderMessage = ref('');
+const commentDraft = ref('');
+const editingCommentId = ref(null);
+const editingCommentBody = ref('');
 
 const newEvent = reactive({
     title: '',
@@ -75,6 +82,9 @@ const syncForm = async () => {
     showReminderForm.value = false;
     newReminderAt.value = '';
     newReminderMessage.value = '';
+    commentDraft.value = '';
+    editingCommentId.value = null;
+    editingCommentBody.value = '';
     linkEventId.value = null;
     editingTitle.value = false;
     if (draftTitle) {
@@ -160,6 +170,33 @@ const addOptions = computed(() => {
 const reminders = computed(() => task.value?.reminders || []);
 const autoReminder = computed(() => reminders.value.find((r) => r.kind === 'deadline_auto') || null);
 const manualReminders = computed(() => reminders.value.filter((r) => r.kind === 'manual'));
+const comments = computed(() => task.value?.comments || []);
+
+const isOwnComment = (comment) => String(comment?.user_id) === String(authUserId.value);
+
+const submitComment = () => {
+    if (!props.taskId || !commentDraft.value.trim()) return;
+    store.createTaskComment(props.taskId, commentDraft.value);
+    commentDraft.value = '';
+};
+
+const startEditComment = (comment) => {
+    editingCommentId.value = comment.id;
+    editingCommentBody.value = comment.body || '';
+};
+
+const cancelEditComment = () => {
+    editingCommentId.value = null;
+    editingCommentBody.value = '';
+};
+
+const saveEditComment = () => {
+    if (!props.taskId || !editingCommentId.value) return;
+    const text = editingCommentBody.value.trim();
+    if (!text) return;
+    store.updateTaskComment(props.taskId, editingCommentId.value, text);
+    cancelEditComment();
+};
 
 const attachments = computed(() => task.value?.attachments || []);
 
@@ -528,6 +565,112 @@ const isDone = computed(
                     auto-grow
                     class="mb-3"
                 />
+
+                <div class="mb-3 pa-3 skydesk-accent-panel">
+                    <div class="d-flex align-center ga-2 mb-2">
+                        <v-icon size="18" color="primary">mdi-comment-text-outline</v-icon>
+                        <div class="text-caption font-weight-bold text-medium-emphasis">Комментарии</div>
+                        <v-chip v-if="comments.length" size="x-small" variant="tonal">{{ comments.length }}</v-chip>
+                    </div>
+
+                    <v-textarea
+                        v-model="commentDraft"
+                        placeholder="Новый комментарий…"
+                        rows="2"
+                        auto-grow
+                        density="compact"
+                        hide-details
+                        class="mb-2"
+                        @keydown.ctrl.enter.prevent="submitComment"
+                        @keydown.meta.enter.prevent="submitComment"
+                    />
+                    <div class="d-flex justify-end mb-3">
+                        <v-btn
+                            size="small"
+                            color="primary"
+                            :disabled="!commentDraft.trim()"
+                            @click="submitComment"
+                        >
+                            Добавить
+                        </v-btn>
+                    </div>
+
+                    <div v-if="!comments.length" class="text-caption text-medium-emphasis">
+                        Пока нет комментариев
+                    </div>
+
+                    <div
+                        v-for="c in comments"
+                        :key="c.id"
+                        class="py-2"
+                        style="border-top:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                    >
+                        <div class="d-flex align-center justify-space-between ga-2 mb-1">
+                            <div class="d-flex align-center ga-2 min-w-0">
+                                <OwnerBadge :show="true" :user="c.user" />
+                                <span class="text-caption text-medium-emphasis text-truncate">
+                                    {{ c.user?.name || 'Пользователь' }}
+                                    · {{ formatDisplayDate(c.created_at) || c.created_at }}
+                                    <span v-if="c.updated_at && c.updated_at !== c.created_at"> · изм.</span>
+                                </span>
+                            </div>
+                            <div v-if="isOwnComment(c)" class="d-flex flex-shrink-0">
+                                <v-btn
+                                    icon
+                                    variant="text"
+                                    size="x-small"
+                                    aria-label="Изменить"
+                                    @click="startEditComment(c)"
+                                >
+                                    <v-icon size="16">mdi-pencil-outline</v-icon>
+                                </v-btn>
+                                <v-btn
+                                    icon
+                                    variant="text"
+                                    size="x-small"
+                                    aria-label="Удалить"
+                                    @click="store.removeTaskComment(props.taskId, c.id)"
+                                >
+                                    <v-icon size="16">mdi-close</v-icon>
+                                </v-btn>
+                            </div>
+                        </div>
+
+                        <div v-if="editingCommentId === c.id">
+                            <v-textarea
+                                v-model="editingCommentBody"
+                                rows="2"
+                                auto-grow
+                                density="compact"
+                                hide-details
+                                class="mb-2"
+                                autofocus
+                            />
+                            <div class="d-flex justify-end ga-2">
+                                <v-btn size="x-small" variant="text" @click="cancelEditComment">Отмена</v-btn>
+                                <v-btn
+                                    size="x-small"
+                                    color="primary"
+                                    :disabled="!editingCommentBody.trim()"
+                                    @click="saveEditComment"
+                                >
+                                    Сохранить
+                                </v-btn>
+                            </div>
+                        </div>
+                        <div v-else class="text-body-2" style="white-space:pre-wrap;word-break:break-word">
+                            <template v-for="(part, idx) in linkifyParts(c.body)" :key="idx">
+                                <a
+                                    v-if="part.type === 'link'"
+                                    :href="part.href"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >{{ part.value }}</a>
+                                <template v-else>{{ part.value }}</template>
+                            </template>
+                        </div>
+                    </div>
+                </div>
 
                 <div
                     v-if="autoReminder || manualReminders.length || showReminderForm"

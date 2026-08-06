@@ -77,6 +77,7 @@ class SkyDeskPresenter
                 'advances',
                 'children',
                 'reminders' => fn ($q) => $q->pending()->orderBy('remind_at'),
+                'comments' => fn ($q) => $q->with('user')->orderByDesc('created_at'),
             ])
             ->orderByDesc('id');
 
@@ -165,11 +166,26 @@ class SkyDeskPresenter
 
     public static function task(Task $task): array
     {
-        $task->loadMissing(['user', 'status', 'priority', 'type', 'events', 'attachments', 'advances', 'children', 'reminders']);
+        $task->loadMissing([
+            'user',
+            'status',
+            'priority',
+            'type',
+            'events',
+            'attachments',
+            'advances',
+            'children',
+            'reminders',
+            'comments.user',
+        ]);
 
         $pendingReminders = $task->reminders
             ->filter(fn ($r) => $r->sent_at === null && $r->cancelled_at === null)
             ->sortBy('remind_at')
+            ->values();
+
+        $comments = $task->comments
+            ->sortByDesc('created_at')
             ->values();
 
         return [
@@ -193,6 +209,21 @@ class SkyDeskPresenter
                 'remind_at' => optional($r->remind_at)?->format('Y-m-d\TH:i'),
                 'message' => $r->message,
             ])->values(),
+            'comments' => $comments->map(fn ($c) => self::comment($c))->values(),
+        ];
+    }
+
+    public static function comment($comment): array
+    {
+        $comment->loadMissing('user');
+
+        return [
+            'id' => $comment->id,
+            'user_id' => $comment->user_id,
+            'user' => self::owner($comment->user),
+            'body' => $comment->body,
+            'created_at' => optional($comment->created_at)?->format('Y-m-d\TH:i'),
+            'updated_at' => optional($comment->updated_at)?->format('Y-m-d\TH:i'),
         ];
     }
 

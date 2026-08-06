@@ -488,6 +488,23 @@ export function useSkyDeskStore() {
         router.delete(`/tasks/${taskId}/reminders/${reminderId}`, visitOpts);
     };
 
+    const createTaskComment = (taskId, body) => {
+        const text = String(body ?? '').trim();
+        if (!text) return;
+        router.post(`/tasks/${taskId}/comments`, { body: text }, visitOpts);
+    };
+
+    const updateTaskComment = (taskId, commentId, body) => {
+        const text = String(body ?? '').trim();
+        if (!text) return;
+        router.put(`/tasks/${taskId}/comments/${commentId}`, { body: text }, visitOpts);
+    };
+
+    const removeTaskComment = (taskId, commentId) => {
+        if (!window.confirm('Удалить комментарий?')) return;
+        router.delete(`/tasks/${taskId}/comments/${commentId}`, visitOpts);
+    };
+
     const resetStore = () => {
         // Данные теперь в БД — демо-сброс не применяется.
     };
@@ -569,6 +586,9 @@ export function useSkyDeskStore() {
         removeTaskAttachment,
         createTaskReminder,
         removeTaskReminder,
+        createTaskComment,
+        updateTaskComment,
+        removeTaskComment,
         resetStore,
     };
 }

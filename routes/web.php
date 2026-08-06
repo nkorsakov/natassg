@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
@@ -35,6 +36,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('/tasks/{task}/attachments/{attachment}', [TaskController::class, 'destroyAttachment'])->name('tasks.attachments.destroy');
     Route::post('/tasks/{task}/reminders', [ReminderController::class, 'store'])->name('tasks.reminders.store');
     Route::delete('/tasks/{task}/reminders/{reminder}', [ReminderController::class, 'destroy'])->name('tasks.reminders.destroy');
+    Route::post('/tasks/{task}/comments', [CommentController::class, 'storeForTask'])->name('tasks.comments.store');
+    Route::put('/tasks/{task}/comments/{comment}', [CommentController::class, 'updateForTask'])->name('tasks.comments.update');
+    Route::delete('/tasks/{task}/comments/{comment}', [CommentController::class, 'destroyForTask'])->name('tasks.comments.destroy');
 
     Route::get('/calendar', [EventController::class, 'index'])->name('calendar.index');
     Route::post('/events', [EventController::class, 'store'])->name('events.store');
