@@ -1,11 +1,11 @@
 <script setup>
 import { computed } from 'vue';
+import { dictChipStyle } from '@/utils/dictColor';
 
 const props = defineProps({
     payload: { type: Object, required: true },
     periodFrom: { type: String, default: '' },
     periodTo: { type: String, default: '' },
-    /** @type {{ type: import('vue').PropType<Record<number, boolean>> }} */
     excludedTaskIds: { type: Object, default: () => ({}) },
     editable: { type: Boolean, default: false },
     compact: { type: Boolean, default: false },
@@ -64,92 +64,126 @@ const movementSign = (tx) => {
     return '';
 };
 
-const movementColor = (tx) => {
-    if (tx.type === 'income' || Number(tx.amount) > 0) return 'success';
-    if (tx.type === 'expense' || Number(tx.amount) < 0) return 'error';
-    return undefined;
+const movementTone = (tx) => {
+    if (tx.type === 'income' || Number(tx.amount) > 0) return 'in';
+    if (tx.type === 'expense' || Number(tx.amount) < 0) return 'out';
+    return 'xfer';
 };
+
+const moneyTiles = computed(() => [
+    {
+        key: 'open',
+        label: 'Входящий',
+        value: formatMoney(finance.value.opening_on_hand),
+        icon: 'mdi-tray-arrow-down',
+        bg: 'rgba(105, 87, 238, 0.12)',
+        color: '#6957EE',
+    },
+    {
+        key: 'close',
+        label: 'Исходящий',
+        value: formatMoney(finance.value.closing_on_hand),
+        icon: 'mdi-tray-arrow-up',
+        bg: 'rgba(91, 141, 239, 0.14)',
+        color: '#5B8DEF',
+    },
+    {
+        key: 'in',
+        label: 'Приходы',
+        value: `+${formatMoney(finance.value.income_total)}`,
+        icon: 'mdi-arrow-down-bold-circle-outline',
+        bg: 'rgba(55, 168, 120, 0.14)',
+        color: '#37A878',
+    },
+    {
+        key: 'out',
+        label: 'Расходы',
+        value: formatMoney(finance.value.expense_total),
+        icon: 'mdi-arrow-up-bold-circle-outline',
+        bg: 'rgba(233, 102, 103, 0.14)',
+        color: '#E96667',
+    },
+]);
 
 const toggle = (id) => emit('toggle-task', id);
 </script>
 
 <template>
-    <div>
-        <div class="mb-6">
+    <div class="report-preview">
+        <header class="report-preview__hero mb-5">
+            <div class="report-preview__eyebrow">Отчёт руководителю</div>
             <h1
-                class="mb-1"
-                :style="{
-                    fontFamily: 'Fraunces,Georgia,serif',
-                    fontSize: compact ? '1.35rem' : '1.75rem',
-                    letterSpacing: '-.03em',
-                    fontWeight: 700,
-                }"
+                class="report-preview__title mb-2"
+                :class="{ 'report-preview__title--compact': compact }"
             >
                 Итоги периода
             </h1>
-            <p class="text-body-2 text-medium-emphasis mb-1">{{ formatPeriod }}</p>
-            <p v-if="subject.name" class="text-caption text-medium-emphasis mb-0">
+            <p class="report-preview__period mb-1">{{ formatPeriod }}</p>
+            <p v-if="subject.name" class="report-preview__subject mb-0">
+                <span class="report-preview__avatar">{{ subject.initials || '·' }}</span>
                 {{ subject.name }}
-                <span v-if="subject.role"> · {{ subject.role }}</span>
+                <span v-if="subject.role" class="text-medium-emphasis"> · {{ subject.role }}</span>
             </p>
-        </div>
+        </header>
 
-        <v-card class="pa-5 mb-5 skydesk-accent-panel">
-            <div class="text-caption font-weight-bold text-primary mb-3">На руках</div>
-            <div class="d-flex flex-wrap ga-6">
-                <div>
-                    <div class="text-caption text-medium-emphasis">Входящий</div>
-                    <div class="text-h6 font-weight-bold" style="font-family:Fraunces,Georgia,serif">
-                        {{ formatMoney(finance.opening_on_hand) }}
-                    </div>
+        <section class="mb-6">
+            <div class="report-preview__section-head mb-3">
+                <div class="report-preview__section-icon" style="background:rgba(105,87,238,.14);color:#6957EE">
+                    <v-icon size="18">mdi-hand-coin-outline</v-icon>
                 </div>
-                <div>
-                    <div class="text-caption text-medium-emphasis">Исходящий</div>
-                    <div class="text-h6 font-weight-bold" style="font-family:Fraunces,Georgia,serif">
-                        {{ formatMoney(finance.closing_on_hand) }}
+                <h2 class="report-preview__section-title">На руках</h2>
+            </div>
+            <div class="report-preview__tiles">
+                <div
+                    v-for="tile in moneyTiles"
+                    :key="tile.key"
+                    class="report-preview__tile"
+                    :style="{ background: tile.bg }"
+                >
+                    <div class="report-preview__tile-icon" :style="{ color: tile.color }">
+                        <v-icon size="18" :icon="tile.icon" />
                     </div>
-                </div>
-                <div>
-                    <div class="text-caption text-medium-emphasis">Приходы</div>
-                    <div class="text-body-1 font-weight-bold text-success">
-                        +{{ formatMoney(finance.income_total) }}
-                    </div>
-                </div>
-                <div>
-                    <div class="text-caption text-medium-emphasis">Расходы</div>
-                    <div class="text-body-1 font-weight-bold text-error">
-                        {{ formatMoney(finance.expense_total) }}
+                    <div class="text-caption text-medium-emphasis">{{ tile.label }}</div>
+                    <div class="report-preview__tile-value" :style="{ color: tile.color }">
+                        {{ tile.value }}
                     </div>
                 </div>
             </div>
-        </v-card>
+        </section>
 
         <section class="mb-6">
-            <h2 class="text-subtitle-1 font-weight-bold mb-3">Работа</h2>
+            <div class="report-preview__section-head mb-3">
+                <div class="report-preview__section-icon" style="background:rgba(55,168,120,.14);color:#37A878">
+                    <v-icon size="18">mdi-check-circle-outline</v-icon>
+                </div>
+                <h2 class="report-preview__section-title">Работа</h2>
+            </div>
 
-            <v-card class="pa-4 mb-3">
-                <div class="text-caption font-weight-bold mb-2">
+            <div class="report-preview__block report-preview__block--closed mb-3">
+                <div class="report-preview__block-head">
+                    <span class="report-preview__dot" style="background:#37A878" />
                     Закрыты
                     <span class="text-medium-emphasis">
                         ({{ closedVisible.length }}{{ editable && closedAll.length !== closedVisible.length ? ` из ${closedAll.length}` : '' }})
                     </span>
                 </div>
-                <div v-if="!closedAll.length" class="text-caption text-medium-emphasis">
+                <div v-if="!closedAll.length" class="text-caption text-medium-emphasis px-4 pb-4">
                     Нет закрытых поручений за период.
                 </div>
                 <div
                     v-for="t in (editable ? closedAll : closedVisible)"
                     :key="`c-${t.id}`"
-                    class="d-flex align-start justify-space-between ga-3 py-2"
-                    :style="{
-                        borderBottom: '1px solid rgba(var(--v-border-color),var(--v-border-opacity))',
-                        opacity: editable && isExcluded(t.id) ? 0.45 : 1,
-                    }"
+                    class="report-preview__row"
+                    :class="{ 'report-preview__row--excluded': editable && isExcluded(t.id) }"
                 >
-                    <div class="min-w-0">
+                    <div
+                        class="report-preview__row-accent"
+                        :style="{ background: t.status_color || t.type_color || '#37A878' }"
+                    />
+                    <div class="min-w-0 flex-grow-1">
                         <div
                             class="text-body-2 font-weight-medium"
-                            :style="editable && isExcluded(t.id) ? { textDecoration: 'line-through' } : {}"
+                            :class="{ 'report-preview__strike': editable && isExcluded(t.id) }"
                         >
                             {{ t.title }}
                         </div>
@@ -159,7 +193,14 @@ const toggle = (id) => emit('toggle-task', id);
                         </div>
                     </div>
                     <div class="d-flex align-center ga-1 flex-shrink-0">
-                        <v-chip size="x-small" variant="tonal">{{ t.status_label || 'Готово' }}</v-chip>
+                        <v-chip
+                            size="x-small"
+                            variant="flat"
+                            class="skydesk-pill"
+                            :style="dictChipStyle(t.status_color || '#626571')"
+                        >
+                            {{ t.status_label || 'Готово' }}
+                        </v-chip>
                         <v-btn
                             v-if="editable"
                             icon
@@ -174,31 +215,33 @@ const toggle = (id) => emit('toggle-task', id);
                         </v-btn>
                     </div>
                 </div>
-            </v-card>
+            </div>
 
-            <v-card class="pa-4 mb-3">
-                <div class="text-caption font-weight-bold mb-2">
+            <div class="report-preview__block report-preview__block--active mb-3">
+                <div class="report-preview__block-head">
+                    <span class="report-preview__dot" style="background:#6957EE" />
                     В работе за период
                     <span class="text-medium-emphasis">
                         ({{ activeVisible.length }}{{ editable && activeAll.length !== activeVisible.length ? ` из ${activeAll.length}` : '' }})
                     </span>
                 </div>
-                <div v-if="!activeAll.length" class="text-caption text-medium-emphasis">
+                <div v-if="!activeAll.length" class="text-caption text-medium-emphasis px-4 pb-4">
                     Нет активных поручений за период.
                 </div>
                 <div
                     v-for="t in (editable ? activeAll : activeVisible)"
                     :key="`a-${t.id}`"
-                    class="d-flex align-start justify-space-between ga-3 py-2"
-                    :style="{
-                        borderBottom: '1px solid rgba(var(--v-border-color),var(--v-border-opacity))',
-                        opacity: editable && isExcluded(t.id) ? 0.45 : 1,
-                    }"
+                    class="report-preview__row"
+                    :class="{ 'report-preview__row--excluded': editable && isExcluded(t.id) }"
                 >
-                    <div class="min-w-0">
+                    <div
+                        class="report-preview__row-accent"
+                        :style="{ background: t.status_color || t.type_color || '#6957EE' }"
+                    />
+                    <div class="min-w-0 flex-grow-1">
                         <div
                             class="text-body-2 font-weight-medium"
-                            :style="editable && isExcluded(t.id) ? { textDecoration: 'line-through' } : {}"
+                            :class="{ 'report-preview__strike': editable && isExcluded(t.id) }"
                         >
                             {{ t.title }}
                         </div>
@@ -207,7 +250,14 @@ const toggle = (id) => emit('toggle-task', id);
                         </div>
                     </div>
                     <div class="d-flex align-center ga-1 flex-shrink-0">
-                        <v-chip size="x-small" variant="tonal">{{ t.status_label || '—' }}</v-chip>
+                        <v-chip
+                            size="x-small"
+                            variant="flat"
+                            class="skydesk-pill"
+                            :style="dictChipStyle(t.status_color || '#6957EE')"
+                        >
+                            {{ t.status_label || '—' }}
+                        </v-chip>
                         <v-btn
                             v-if="editable"
                             icon
@@ -222,61 +272,284 @@ const toggle = (id) => emit('toggle-task', id);
                         </v-btn>
                     </div>
                 </div>
-            </v-card>
+            </div>
 
-            <v-card class="pa-4">
-                <div class="text-caption font-weight-bold mb-2">
+            <div class="report-preview__block report-preview__block--events">
+                <div class="report-preview__block-head">
+                    <span class="report-preview__dot" style="background:#FFAD4D" />
                     События
                     <span class="text-medium-emphasis">({{ work.events?.length || 0 }})</span>
                 </div>
-                <div v-if="!(work.events || []).length" class="text-caption text-medium-emphasis">
+                <div v-if="!(work.events || []).length" class="text-caption text-medium-emphasis px-4 pb-4">
                     Нет событий за период.
                 </div>
                 <div
                     v-for="e in work.events || []"
                     :key="`e-${e.id}`"
-                    class="d-flex align-start justify-space-between ga-3 py-2"
-                    style="border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                    class="report-preview__row"
                 >
-                    <div class="min-w-0">
+                    <div
+                        class="report-preview__row-accent"
+                        :style="{ background: e.type_color || '#FFAD4D' }"
+                    />
+                    <div class="min-w-0 flex-grow-1">
                         <div class="text-body-2 font-weight-medium">{{ e.title }}</div>
                         <div class="text-caption text-medium-emphasis">
                             {{ formatEventWhen(e) }}
                             <span v-if="e.place"> · {{ e.place }}</span>
                         </div>
                     </div>
-                    <v-chip size="x-small" variant="tonal">{{ e.type_label || 'Событие' }}</v-chip>
+                    <v-chip
+                        size="x-small"
+                        variant="flat"
+                        class="skydesk-pill"
+                        :style="dictChipStyle(e.type_color || '#FFAD4D')"
+                    >
+                        {{ e.type_label || 'Событие' }}
+                    </v-chip>
                 </div>
-            </v-card>
+            </div>
         </section>
 
-        <section class="mb-2">
-            <h2 class="text-subtitle-1 font-weight-bold mb-3">Движение средств</h2>
-            <v-card class="pa-4">
-                <div v-if="!(finance.movements || []).length" class="text-caption text-medium-emphasis">
+        <section>
+            <div class="report-preview__section-head mb-3">
+                <div class="report-preview__section-icon" style="background:rgba(233,102,103,.14);color:#E96667">
+                    <v-icon size="18">mdi-swap-horizontal</v-icon>
+                </div>
+                <h2 class="report-preview__section-title">Движение средств</h2>
+            </div>
+
+            <div class="report-preview__block">
+                <div v-if="!(finance.movements || []).length" class="text-caption text-medium-emphasis pa-4">
                     За период движений не было.
                 </div>
                 <div
                     v-for="tx in finance.movements || []"
                     :key="tx.id"
-                    class="d-flex align-start justify-space-between ga-3 py-2"
-                    style="border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                    class="report-preview__row report-preview__row--money"
+                    :class="`report-preview__row--${movementTone(tx)}`"
                 >
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex-grow-1">
                         <div class="text-body-2 font-weight-medium">{{ tx.title }}</div>
                         <div class="text-caption text-medium-emphasis">
                             {{ tx.occurred_at }}
                             · {{ tx.type }}
                         </div>
                     </div>
-                    <div
-                        class="text-body-2 font-weight-bold flex-shrink-0"
-                        :class="movementColor(tx) ? `text-${movementColor(tx)}` : ''"
-                    >
+                    <div class="report-preview__amount flex-shrink-0">
                         {{ movementSign(tx) }}{{ formatMoney(Math.abs(Number(tx.amount || 0))) }}
                     </div>
                 </div>
-            </v-card>
+            </div>
         </section>
     </div>
 </template>
+
+<style scoped>
+.report-preview__hero {
+    position: relative;
+    padding: 20px 20px 18px;
+    border-radius: 20px;
+    overflow: hidden;
+    background:
+        radial-gradient(120% 140% at 0% 0%, rgba(105, 87, 238, 0.22), transparent 55%),
+        radial-gradient(100% 120% at 100% 0%, rgba(255, 173, 77, 0.18), transparent 50%),
+        radial-gradient(90% 100% at 80% 100%, rgba(55, 168, 120, 0.12), transparent 45%),
+        rgba(var(--v-theme-surface), 0.72);
+    border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.report-preview__eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgb(var(--v-theme-primary));
+    margin-bottom: 6px;
+}
+
+.report-preview__title {
+    font-family: Fraunces, Georgia, serif;
+    font-size: 1.85rem;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.report-preview__title--compact {
+    font-size: 1.4rem;
+}
+
+.report-preview__period {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(var(--v-theme-on-surface), 0.72);
+}
+
+.report-preview__subject {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    margin-top: 10px;
+}
+
+.report-preview__avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: rgb(var(--v-theme-primary));
+}
+
+.report-preview__section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.report-preview__section-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+}
+
+.report-preview__section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.report-preview__tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@media (min-width: 700px) {
+    .report-preview__tiles {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.report-preview__tile {
+    border-radius: 16px;
+    padding: 14px 14px 12px;
+    min-height: 92px;
+}
+
+.report-preview__tile-icon {
+    margin-bottom: 8px;
+}
+
+.report-preview__tile-value {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+    margin-top: 2px;
+    line-height: 1.2;
+}
+
+.report-preview__block {
+    border-radius: 16px;
+    border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    background: rgb(var(--v-theme-surface));
+    overflow: hidden;
+}
+
+.report-preview__block--closed {
+    background:
+        linear-gradient(180deg, rgba(55, 168, 120, 0.08), transparent 48px),
+        rgb(var(--v-theme-surface));
+}
+
+.report-preview__block--active {
+    background:
+        linear-gradient(180deg, rgba(105, 87, 238, 0.08), transparent 48px),
+        rgb(var(--v-theme-surface));
+}
+
+.report-preview__block--events {
+    background:
+        linear-gradient(180deg, rgba(255, 173, 77, 0.1), transparent 48px),
+        rgb(var(--v-theme-surface));
+}
+
+.report-preview__block-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.report-preview__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.report-preview__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    position: relative;
+}
+
+.report-preview__row-accent {
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+}
+
+.report-preview__row--excluded {
+    opacity: 0.45;
+}
+
+.report-preview__strike {
+    text-decoration: line-through;
+}
+
+.report-preview__row--money {
+    padding-left: 16px;
+}
+
+.report-preview__row--in {
+    background: rgba(55, 168, 120, 0.05);
+}
+
+.report-preview__row--out {
+    background: rgba(233, 102, 103, 0.05);
+}
+
+.report-preview__amount {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.report-preview__row--in .report-preview__amount {
+    color: #37A878;
+}
+
+.report-preview__row--out .report-preview__amount {
+    color: #E96667;
+}
+
+.report-preview__row--xfer .report-preview__amount {
+    color: #5B8DEF;
+}
+</style>
