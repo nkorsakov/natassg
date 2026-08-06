@@ -73,6 +73,7 @@ const items = computed(() => [
 const currentPath = computed(() => page.url.split('?')[0]);
 const crumb = computed(() => {
     if (currentPath.value === '/settings') return 'Настройки';
+    if (currentPath.value === '/reports') return 'Отчёт';
     const hit = items.value.find((i) => i.href === currentPath.value);
     return hit?.title ?? props.title;
 });
@@ -104,6 +105,7 @@ const go = (href) => router.visit(href);
 
 const openCreate = () => openQuickCreate();
 const openSettings = () => router.visit('/settings');
+const openReport = () => router.visit('/reports');
 const logout = () => router.post('/logout');
 
 const onTaskCreated = (id) => openTask(id);
@@ -224,6 +226,15 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
                 </div>
                 <div class="d-flex align-center ga-2">
                     <span class="text-body-2 font-weight-medium text-capitalize">{{ todayLabel }}</span>
+                    <v-btn
+                        variant="tonal"
+                        size="small"
+                        prepend-icon="mdi-file-chart-outline"
+                        :class="{ 'v-btn--active': isActive('/reports') }"
+                        @click="openReport"
+                    >
+                        Отчёт
+                    </v-btn>
                     <AppearanceMenu />
                 </div>
             </div>
@@ -242,6 +253,18 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
             </div>
             <template #append>
                 <div class="d-flex align-center ga-1 pe-1">
+                    <v-btn
+                        icon
+                        variant="tonal"
+                        size="small"
+                        color="primary"
+                        aria-label="Отчёт"
+                        title="Отчёт руководителю"
+                        :class="{ 'v-btn--active': isActive('/reports') }"
+                        @click="openReport"
+                    >
+                        <v-icon>mdi-file-chart-outline</v-icon>
+                    </v-btn>
                     <v-btn
                         icon
                         variant="outlined"

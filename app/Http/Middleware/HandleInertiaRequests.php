@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
                 'created_advance_id' => fn () => $request->session()->get('created_advance_id'),
                 'created_contact_id' => fn () => $request->session()->get('created_contact_id'),
                 'created_supplier_id' => fn () => $request->session()->get('created_supplier_id'),
+                'created_report' => fn () => $request->session()->get('created_report'),
             ],
         ];
     }
