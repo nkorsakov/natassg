@@ -1,18 +1,27 @@
 <script setup>
-import { computed } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, useForm } from '@inertiajs/vue3';
 import { useTheme } from 'vuetify';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
+import PinDialog from '@/Components/PinDialog.vue';
 import ReportPreview from '@/Components/ReportPreview.vue';
 
 const props = defineProps({
     report: { type: Object, required: true },
+    just_accepted: { type: Boolean, default: false },
 });
 
 const theme = useTheme();
 const primaryColor = computed(() => theme.current.value.colors.primary);
 const payload = computed(() => props.report?.payload || {});
 const isDark = computed(() => !!theme.current.value.dark);
+const isAccepted = computed(() => props.report?.status === 'accepted');
+
+const showPin = ref(false);
+
+const form = useForm({
+    pin: '',
+});
 
 const formatPeriod = computed(() => {
     const from = props.report?.period_from;
@@ -22,6 +31,41 @@ const formatPeriod = computed(() => {
     const b = to ? new Date(`${to}T12:00:00`).toLocaleDateString('ru-RU', opts) : '—';
     return `${a} — ${b}`;
 });
+
+const formatAcceptedAt = computed(() => {
+    if (!props.report?.accepted_at) return '';
+    return new Date(props.report.accepted_at).toLocaleString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+});
+
+const pinError = computed(() => form.errors.pin || '');
+
+const openPin = () => {
+    form.clearErrors();
+    form.reset('pin');
+    showPin.value = true;
+};
+
+const closePin = () => {
+    showPin.value = false;
+    form.clearErrors();
+    form.reset('pin');
+};
+
+const submitAccept = (pin) => {
+    form.pin = pin;
+    form.post(`/r/${props.report.token}/accept`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showPin.value = false;
+            form.reset('pin');
+        },
+    });
+};
 </script>
 
 <template>
@@ -55,6 +99,38 @@ const formatPeriod = computed(() => {
 
             <v-main>
                 <v-container class="pa-4 pa-md-8" style="max-width:860px">
+                    <v-alert
+                        v-if="isAccepted"
+                        type="success"
+                        variant="tonal"
+                        class="mb-4"
+                        border="start"
+                        density="comfortable"
+                    >
+                        <div class="font-weight-bold">Отчёт принят</div>
+                        <div v-if="formatAcceptedAt" class="text-caption">
+                            {{ formatAcceptedAt }}
+                        </div>
+                    </v-alert>
+
+                    <v-card v-else class="pa-4 mb-4">
+                        <div class="d-flex flex-wrap align-center justify-space-between ga-3">
+                            <div class="min-w-0">
+                                <div class="text-subtitle-2 font-weight-bold">Принять отчёт</div>
+                                <div class="text-caption text-medium-emphasis">
+                                    Подтвердите просмотр кодом руководителя
+                                </div>
+                            </div>
+                            <v-btn
+                                color="primary"
+                                prepend-icon="mdi-check-decagram-outline"
+                                @click="openPin"
+                            >
+                                Принять
+                            </v-btn>
+                        </div>
+                    </v-card>
+
                     <ReportPreview
                         :payload="payload"
                         :period-from="report.period_from"
@@ -63,6 +139,17 @@ const formatPeriod = computed(() => {
                 </v-container>
             </v-main>
         </div>
+
+        <PinDialog
+            v-model="showPin"
+            title="Принять отчёт"
+            subtitle="Введите 4-значный код руководителя"
+            confirm-label="Принять"
+            :loading="form.processing"
+            :error="pinError"
+            @submit="submitAccept"
+            @cancel="closePin"
+        />
     </v-app>
 </template>
 

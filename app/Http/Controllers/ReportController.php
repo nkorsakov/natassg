@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -67,19 +68,39 @@ class ReportController extends Controller
             ]);
     }
 
-    public function show(string $token): Response
+    public function show(Request $request, string $token): Response
+    {
+        $report = ManagerReport::query()->where('token', $token)->firstOrFail();
+        $justAccepted = (bool) $request->session()->pull('just_accepted', false);
+
+        if (! $justAccepted) {
+            $report->recordView();
+            $report = $report->fresh();
+        }
+
+        return Inertia::render('Reports/Public', [
+            'report' => $this->publicPayload($report),
+            'just_accepted' => $justAccepted,
+        ]);
+    }
+
+    public function accept(Request $request, string $token): RedirectResponse
     {
         $report = ManagerReport::query()->where('token', $token)->firstOrFail();
 
-        return Inertia::render('Reports/Public', [
-            'report' => [
-                'token' => $report->token,
-                'period_from' => $report->period_from?->toDateString(),
-                'period_to' => $report->period_to?->toDateString(),
-                'created_at' => optional($report->created_at)?->toIso8601String(),
-                'payload' => $report->payload,
-            ],
+        $data = $request->validate([
+            'pin' => ['required', 'string', 'max:16'],
         ]);
+
+        if (! $report->acceptWithPin((string) $data['pin'])) {
+            throw ValidationException::withMessages([
+                'pin' => 'Неверный код подтверждения',
+            ]);
+        }
+
+        return redirect()
+            ->route('reports.public', ['token' => $report->token])
+            ->with('just_accepted', true);
     }
 
     public function destroy(Request $request, ManagerReport $report): RedirectResponse|JsonResponse
@@ -117,6 +138,23 @@ class ReportController extends Controller
     /**
      * @return array<string, mixed>
      */
+    protected function publicPayload(ManagerReport $report): array
+    {
+        return [
+            'token' => $report->token,
+            'period_from' => $report->period_from?->toDateString(),
+            'period_to' => $report->period_to?->toDateString(),
+            'created_at' => optional($report->created_at)?->toIso8601String(),
+            'payload' => $report->payload,
+            'views_count' => (int) $report->views_count,
+            'status' => $report->status,
+            'accepted_at' => optional($report->accepted_at)?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     protected function summary(ManagerReport $report): array
     {
         $payload = $report->payload ?? [];
@@ -130,6 +168,9 @@ class ReportController extends Controller
             'period_from' => $report->period_from?->toDateString(),
             'period_to' => $report->period_to?->toDateString(),
             'created_at' => optional($report->created_at)?->toIso8601String(),
+            'views_count' => (int) $report->views_count,
+            'status' => $report->status,
+            'accepted_at' => optional($report->accepted_at)?->toIso8601String(),
             'summary' => [
                 'closed_count' => count($work['closed'] ?? []),
                 'active_count' => count($work['active'] ?? []),

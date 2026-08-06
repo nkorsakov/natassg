@@ -43,6 +43,9 @@ class ManagerReportBuilder
             'period_from' => $from->toDateString(),
             'period_to' => $to->toDateString(),
             'payload' => $payload,
+            'views_count' => 0,
+            'status' => ManagerReport::STATUS_PENDING,
+            'accepted_at' => null,
         ]);
     }
 

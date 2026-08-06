@@ -45,6 +45,9 @@ class ManagerReportTest extends TestCase
             $this->user,
         );
 
+        $this->assertSame(0, (int) $report->views_count);
+        $this->assertSame(ManagerReport::STATUS_PENDING, $report->status);
+
         $this->get('/r/'.$report->token)
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -52,7 +55,58 @@ class ManagerReportTest extends TestCase
                 ->where('report.token', $report->token)
                 ->where('report.period_from', '2026-08-01')
                 ->where('report.period_to', '2026-08-07')
+                ->where('report.views_count', 1)
+                ->where('report.status', 'pending')
             );
+
+        $this->assertSame(1, (int) $report->fresh()->views_count);
+
+        $this->get('/r/'.$report->token)->assertOk();
+        $this->assertSame(2, (int) $report->fresh()->views_count);
+    }
+
+    public function test_accept_report_with_correct_pin(): void
+    {
+        $report = app(ManagerReportBuilder::class)->create(
+            $this->user,
+            Carbon::parse('2026-08-01'),
+            Carbon::parse('2026-08-07'),
+            $this->user,
+        );
+
+        $this->post('/r/'.$report->token.'/accept', ['pin' => ManagerReport::acceptPin()])
+            ->assertRedirect('/r/'.$report->token);
+
+        $this->followingRedirects()
+            ->post('/r/'.$report->token.'/accept', ['pin' => ManagerReport::acceptPin()])
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Reports/Public', false)
+                ->where('report.status', 'accepted')
+                ->where('just_accepted', true)
+            );
+
+        $report->refresh();
+        $this->assertSame(ManagerReport::STATUS_ACCEPTED, $report->status);
+        $this->assertNotNull($report->accepted_at);
+        // Redirect after accept should not bump views.
+        $this->assertSame(0, (int) $report->views_count);
+    }
+
+    public function test_accept_report_with_wrong_pin_fails(): void
+    {
+        $report = app(ManagerReportBuilder::class)->create(
+            $this->user,
+            Carbon::parse('2026-08-01'),
+            Carbon::parse('2026-08-07'),
+            $this->user,
+        );
+
+        $this->from('/r/'.$report->token)
+            ->post('/r/'.$report->token.'/accept', ['pin' => '0000'])
+            ->assertSessionHasErrors('pin');
+
+        $this->assertSame(ManagerReport::STATUS_PENDING, $report->fresh()->status);
     }
 
     public function test_unknown_token_returns_404(): void

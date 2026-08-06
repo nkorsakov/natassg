@@ -131,7 +131,7 @@ const toggle = (id) => emit('toggle-task', id);
                 <div class="report-preview__section-icon" style="background:rgba(105,87,238,.14);color:#6957EE">
                     <v-icon size="18">mdi-hand-coin-outline</v-icon>
                 </div>
-                <h2 class="report-preview__section-title">На руках</h2>
+                <h2 class="report-preview__section-title">Деньги</h2>
             </div>
             <div class="report-preview__tiles">
                 <div
@@ -158,7 +158,7 @@ const toggle = (id) => emit('toggle-task', id);
                 <div class="report-preview__section-icon" style="background:rgba(55,168,120,.14);color:#37A878">
                     <v-icon size="18">mdi-check-circle-outline</v-icon>
                 </div>
-                <h2 class="report-preview__section-title">Работа</h2>
+                <h2 class="report-preview__section-title">Задачи</h2>
             </div>
 
             <div class="report-preview__block report-preview__block--closed mb-3">
@@ -318,7 +318,7 @@ const toggle = (id) => emit('toggle-task', id);
                 <div class="report-preview__section-icon" style="background:rgba(233,102,103,.14);color:#E96667">
                     <v-icon size="18">mdi-swap-horizontal</v-icon>
                 </div>
-                <h2 class="report-preview__section-title">Движение средств</h2>
+                <h2 class="report-preview__section-title">Движение денежных средств</h2>
             </div>
 
             <div class="report-preview__block">

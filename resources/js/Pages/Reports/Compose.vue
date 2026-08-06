@@ -241,6 +241,26 @@ const removeReport = (id) => {
     router.delete(`/reports/${id}`, { preserveScroll: true });
 };
 
+const statusLabel = (status) => {
+    if (status === 'accepted') return 'Принят';
+    return 'Ожидает';
+};
+
+const statusColor = (status) => {
+    if (status === 'accepted') return 'success';
+    return 'warning';
+};
+
+const viewsLabel = (n) => {
+    const count = Number(n || 0);
+    const mod10 = count % 10;
+    const mod100 = count % 100;
+    let word = 'просмотров';
+    if (mod10 === 1 && mod100 !== 11) word = 'просмотр';
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) word = 'просмотра';
+    return `${count} ${word}`;
+};
+
 const pageTitle = computed(() => (mode.value === 'create' ? 'Новый отчёт' : 'Отчёты'));
 const pageSubtitle = computed(() =>
     mode.value === 'create'
@@ -335,13 +355,23 @@ const pageSubtitle = computed(() =>
                     style="border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
                 >
                     <div class="flex-grow-1 min-w-0">
-                        <div class="text-body-2 font-weight-medium">
-                            {{ formatPeriod(r.period_from, r.period_to) }}
+                        <div class="d-flex align-center ga-2 flex-wrap mb-1">
+                            <div class="text-body-2 font-weight-medium">
+                                {{ formatPeriod(r.period_from, r.period_to) }}
+                            </div>
+                            <v-chip
+                                size="x-small"
+                                variant="tonal"
+                                :color="statusColor(r.status)"
+                            >
+                                {{ statusLabel(r.status) }}
+                            </v-chip>
                         </div>
                         <div class="text-caption text-medium-emphasis">
                             {{ formatMoney(r.summary?.opening_on_hand) }}
                             → {{ formatMoney(r.summary?.closing_on_hand) }}
                             <span v-if="r.created_at"> · {{ formatCreatedAt(r.created_at) }}</span>
+                            · {{ viewsLabel(r.views_count) }}
                         </div>
                     </div>
                     <v-btn

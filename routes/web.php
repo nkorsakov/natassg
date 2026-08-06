@@ -8,6 +8,7 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\ReminderController;
+use App\Http\Controllers\PublicFinanceController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
@@ -24,6 +25,13 @@ Route::middleware('guest')->group(function () {
 Route::get('/r/{token}', [ReportController::class, 'show'])
     ->where('token', '[A-Za-z0-9]+')
     ->name('reports.public');
+Route::post('/r/{token}/accept', [ReportController::class, 'accept'])
+    ->where('token', '[A-Za-z0-9]+')
+    ->name('reports.accept');
+
+Route::get('/cashflow', [PublicFinanceController::class, 'show'])->name('cashflow.public');
+Route::post('/cashflow/unlock', [PublicFinanceController::class, 'unlock'])->name('cashflow.unlock');
+Route::post('/cashflow/lock', [PublicFinanceController::class, 'lock'])->name('cashflow.lock');
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
