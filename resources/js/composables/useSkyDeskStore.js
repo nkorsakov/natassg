@@ -4,6 +4,11 @@ import { router, usePage } from '@inertiajs/vue3';
 const visitOpts = {
     preserveScroll: true,
     preserveState: true,
+    onError: (errors) => {
+        const first = Object.values(errors || {}).find((v) => v != null);
+        const msg = Array.isArray(first) ? first[0] : first;
+        if (msg) window.alert(String(msg));
+    },
 };
 
 function emptyWorkspace() {
@@ -224,7 +229,11 @@ export function useSkyDeskStore() {
                 ...visitOpts,
                 onSuccess: (pageResult) => {
                     const id = pageResult.props.flash?.created_task_id;
-                    resolve(id ? { id } : getTask(id) || { id });
+                    resolve(id ? { id } : null);
+                },
+                onError: (errors) => {
+                    visitOpts.onError?.(errors);
+                    resolve(null);
                 },
             });
         });

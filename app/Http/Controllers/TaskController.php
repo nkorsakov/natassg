@@ -7,8 +7,10 @@ use App\Services\TaskAttachmentService;
 use App\Services\TaskService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 class TaskController extends Controller
 {
@@ -32,7 +34,11 @@ class TaskController extends Controller
             'event_ids.*' => ['integer', 'exists:calendar_events,id'],
         ]);
 
-        $task = $tasks->create($request->user(), $data);
+        try {
+            $task = $tasks->create($request->user(), $data);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status_id' => $e->getMessage()]);
+        }
 
         return back()->with('created_task_id', $task->id);
     }
@@ -42,7 +48,7 @@ class TaskController extends Controller
         $this->authorizeTask($request, $task);
 
         $data = $request->validate([
-            'title' => ['sometimes', 'string', 'max:255'],
+            'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'parent_id' => ['nullable', 'integer', 'exists:tasks,id'],
             'status_id' => ['nullable', 'string'],
             'priority_id' => ['nullable', 'string'],
@@ -51,7 +57,11 @@ class TaskController extends Controller
             'note' => ['nullable', 'string'],
         ]);
 
-        $tasks->update($task, $data);
+        try {
+            $tasks->update($task, $data);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['status_id' => $e->getMessage()]);
+        }
 
         return back();
     }

@@ -46,8 +46,8 @@ class TaskService
 
     public function update(Task $task, array $data): Task
     {
-        if (array_key_exists('title', $data) && $data['title'] !== null) {
-            $task->title = $data['title'];
+        if (array_key_exists('title', $data)) {
+            $task->title = (string) ($data['title'] ?? '');
         }
         if (array_key_exists('note', $data)) {
             $task->note = $data['note'];

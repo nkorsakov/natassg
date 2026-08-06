@@ -310,8 +310,29 @@ class ExpenseService
                 throw new InvalidArgumentException('Нельзя удалить трату закрытого аванса');
             }
 
-            // Hard-delete ledger rows. Do NOT reverse-then-delete: expense_id is nullOnDelete
-            // historically, which left orphan "Трата" rows in the registry after SET NULL.
+            $owner = $this->resolveOwner($user, $expense->user_id);
+            $wallet = \App\Models\Wallet::query()->firstOrCreate(
+                ['user_id' => $owner->id],
+                ['balance_minor' => 0, 'currency' => 'RUB'],
+            );
+            $wallet = \App\Models\Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+
+            // Hard-delete ledger rows and restore stored wallet balance for wallet-account debits.
+            $txs = WalletTransaction::query()
+                ->where('expense_id', $expense->id)
+                ->lockForUpdate()
+                ->get();
+
+            $walletDelta = 0;
+            foreach ($txs as $tx) {
+                if ($tx->account === WalletTransaction::ACCOUNT_WALLET) {
+                    $walletDelta -= (int) $tx->amount_minor;
+                }
+            }
+            if ($walletDelta !== 0) {
+                $wallet->increment('balance_minor', $walletDelta);
+            }
+
             WalletTransaction::query()->where('expense_id', $expense->id)->delete();
 
             foreach ($expense->receipts as $receipt) {

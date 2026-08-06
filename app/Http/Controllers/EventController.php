@@ -6,8 +6,10 @@ use App\Models\CalendarEvent;
 use App\Support\DictionaryResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 class EventController extends Controller
 {
@@ -30,16 +32,20 @@ class EventController extends Controller
             'task_ids.*' => ['integer', 'exists:tasks,id'],
         ]);
 
-        $event = CalendarEvent::create([
-            'user_id' => $request->user()->id,
-            'event_type_id' => DictionaryResolver::eventTypeId($data['type_id'] ?? 'other'),
-            'title' => $data['title'],
-            'starts_at' => $data['start'],
-            'ends_at' => $data['end'] ?? null,
-            'all_day' => (bool) ($data['allDay'] ?? false),
-            'place' => $data['place'] ?? null,
-            'note' => $data['note'] ?? null,
-        ]);
+        try {
+            $event = CalendarEvent::create([
+                'user_id' => $request->user()->id,
+                'event_type_id' => DictionaryResolver::eventTypeId($data['type_id'] ?? 'other'),
+                'title' => $data['title'],
+                'starts_at' => $data['start'],
+                'ends_at' => $data['end'] ?? null,
+                'all_day' => (bool) ($data['allDay'] ?? false),
+                'place' => $data['place'] ?? null,
+                'note' => $data['note'] ?? null,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['type_id' => $e->getMessage()]);
+        }
 
         if (! empty($data['task_ids'])) {
             $event->tasks()->sync($data['task_ids']);
@@ -64,29 +70,33 @@ class EventController extends Controller
             'task_ids.*' => ['integer', 'exists:tasks,id'],
         ]);
 
-        if (isset($data['title'])) {
-            $event->title = $data['title'];
-        }
-        if (array_key_exists('type_id', $data) && $data['type_id'] !== null) {
-            $event->event_type_id = DictionaryResolver::eventTypeId($data['type_id']);
-        }
-        if (isset($data['start'])) {
-            $event->starts_at = $data['start'];
-        }
-        if (array_key_exists('end', $data)) {
-            $event->ends_at = $data['end'] ?: null;
-        }
-        if (array_key_exists('allDay', $data)) {
-            $event->all_day = (bool) $data['allDay'];
-        }
-        if (array_key_exists('place', $data)) {
-            $event->place = $data['place'];
-        }
-        if (array_key_exists('note', $data)) {
-            $event->note = $data['note'];
-        }
+        try {
+            if (isset($data['title'])) {
+                $event->title = $data['title'];
+            }
+            if (array_key_exists('type_id', $data) && $data['type_id'] !== null) {
+                $event->event_type_id = DictionaryResolver::eventTypeId($data['type_id']);
+            }
+            if (isset($data['start'])) {
+                $event->starts_at = $data['start'];
+            }
+            if (array_key_exists('end', $data)) {
+                $event->ends_at = $data['end'] ?: null;
+            }
+            if (array_key_exists('allDay', $data)) {
+                $event->all_day = (bool) $data['allDay'];
+            }
+            if (array_key_exists('place', $data)) {
+                $event->place = $data['place'];
+            }
+            if (array_key_exists('note', $data)) {
+                $event->note = $data['note'];
+            }
 
-        $event->save();
+            $event->save();
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['type_id' => $e->getMessage()]);
+        }
 
         if (array_key_exists('task_ids', $data)) {
             $event->tasks()->sync($data['task_ids'] ?? []);

@@ -329,6 +329,29 @@ class FinanceCanonTest extends TestCase
         $this->assertFalse($titles->contains('Трата'));
     }
 
+    public function test_destroy_wallet_expense_restores_balance(): void
+    {
+        app(WalletService::class)->topUp($this->user, [
+            'amount' => 500,
+            'disbursement_method_id' => $this->method->slug,
+        ]);
+
+        $expense = app(ExpenseService::class)->addExpense($this->user, [
+            'amount' => 200,
+            'article_id' => $this->article->slug,
+            'supplier_id' => $this->supplier->id,
+            'debit_account' => 'wallet',
+        ]);
+
+        $this->assertSame(30000, (int) $this->user->wallet()->value('balance_minor'));
+
+        app(ExpenseService::class)->destroyExpense($this->user, $expense);
+
+        $this->assertSame(50000, (int) $this->user->fresh()->wallet()->value('balance_minor'));
+        $this->assertDatabaseMissing('expenses', ['id' => $expense->id]);
+        $this->assertSame(0, WalletTransaction::query()->where('expense_id', $expense->id)->count());
+    }
+
     public function test_http_income_and_received(): void
     {
         $this->actingAs($this->user)
