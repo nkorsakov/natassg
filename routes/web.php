@@ -28,6 +28,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
     Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
+    Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     Route::post('/tasks/{task}/make-root', [TaskController::class, 'makeRoot'])->name('tasks.make-root');
     Route::post('/tasks/{task}/close', [TaskController::class, 'close'])->name('tasks.close');
     Route::post('/tasks/{task}/events', [TaskController::class, 'linkEvent'])->name('tasks.link-event');

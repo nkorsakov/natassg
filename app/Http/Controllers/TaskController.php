@@ -82,6 +82,14 @@ class TaskController extends Controller
         return back();
     }
 
+    public function destroy(Request $request, Task $task, TaskService $tasks): RedirectResponse
+    {
+        $this->authorizeTask($request, $task);
+        $tasks->destroyCascade($task);
+
+        return back();
+    }
+
     public function linkEvent(Request $request, Task $task, TaskService $tasks): RedirectResponse
     {
         $this->authorizeTask($request, $task);

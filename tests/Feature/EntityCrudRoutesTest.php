@@ -120,6 +120,43 @@ class EntityCrudRoutesTest extends TestCase
         $this->assertSame('done', Task::find($taskId)?->fresh('status')->status?->slug);
     }
 
+    public function test_task_destroy_soft_deletes_with_children(): void
+    {
+        $parent = $this->actingAs($this->user)->post('/tasks', [
+            'title' => 'Родитель',
+            'status_id' => 'new',
+        ]);
+        $parentId = (int) session('created_task_id');
+
+        $this->actingAs($this->user)->post('/tasks', [
+            'title' => 'Ребёнок',
+            'parent_id' => $parentId,
+            'status_id' => 'new',
+        ]);
+        $childId = (int) session('created_task_id');
+
+        $event = CalendarEvent::create([
+            'user_id' => $this->user->id,
+            'event_type_id' => \App\Models\EventType::query()->firstOrFail()->id,
+            'title' => 'Событие',
+            'starts_at' => now(),
+            'all_day' => false,
+        ]);
+        $this->actingAs($this->user)->post("/tasks/{$parentId}/events", [
+            'event_id' => $event->id,
+        ])->assertRedirect();
+
+        $this->actingAs($this->user)->delete("/tasks/{$parentId}")->assertRedirect();
+
+        $this->assertSoftDeleted('tasks', ['id' => $parentId]);
+        $this->assertSoftDeleted('tasks', ['id' => $childId]);
+        $this->assertDatabaseMissing('task_event', [
+            'task_id' => $parentId,
+            'event_id' => $event->id,
+        ]);
+        $this->assertDatabaseHas('calendar_events', ['id' => $event->id]);
+    }
+
     public function test_event_store_update_destroy(): void
     {
         $create = $this->actingAs($this->user)->post('/events', [

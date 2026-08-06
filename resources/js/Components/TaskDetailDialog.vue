@@ -25,6 +25,7 @@ const { isAdmin } = useIsAdmin();
 const authUserId = computed(() => page.props.auth?.user?.id ?? null);
 
 const confirmClose = ref(false);
+const confirmDelete = ref(false);
 const linkEventId = ref(null);
 const showNewEvent = ref(false);
 const showDeadline = ref(false);
@@ -314,6 +315,17 @@ const confirmCascadeClose = () => {
     store.closeTaskCascade(props.taskId);
     form.status_id = 'done';
     confirmClose.value = false;
+};
+
+const requestDelete = () => {
+    confirmDelete.value = true;
+};
+
+const confirmCascadeDelete = () => {
+    if (!props.taskId) return;
+    store.removeTask(props.taskId);
+    confirmDelete.value = false;
+    model.value = false;
 };
 
 const attachEvent = () => {
@@ -943,10 +955,13 @@ const isDone = computed(
 
             <v-divider />
             <v-card-actions class="px-6 py-4 flex-wrap ga-2">
-                <div class="text-caption text-medium-emphasis">
+                <v-btn variant="text" color="error" @click="requestDelete">
+                    Удалить
+                </v-btn>
+                <v-spacer />
+                <div class="text-caption text-medium-emphasis me-2">
                     Изменения сохраняются сразу
                 </div>
-                <v-spacer />
                 <v-btn variant="text" @click="model = false">
                     Закрыть окно
                 </v-btn>
@@ -963,6 +978,23 @@ const isDone = computed(
             <div class="d-flex justify-end ga-2">
                 <v-btn variant="tonal" @click="confirmClose = false">Отмена</v-btn>
                 <v-btn color="primary" @click="confirmCascadeClose">Закрыть всё</v-btn>
+            </div>
+        </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="confirmDelete" max-width="420">
+        <v-card class="pa-5">
+            <div class="text-h6 font-weight-bold mb-2">Удалить поручение?</div>
+            <p class="text-body-2 text-medium-emphasis mb-4">
+                {{
+                    (children.length || store.descendantsOf(props.taskId).length)
+                        ? 'Поручение и все вложенные подзадачи будут удалены. Авансы и события останутся, связь с ними снимется.'
+                        : 'Поручение будет удалено. Авансы и события останутся, связь с ними снимется.'
+                }}
+            </p>
+            <div class="d-flex justify-end ga-2">
+                <v-btn variant="tonal" @click="confirmDelete = false">Отмена</v-btn>
+                <v-btn color="error" @click="confirmCascadeDelete">Удалить</v-btn>
             </div>
         </v-card>
     </v-dialog>

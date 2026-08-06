@@ -103,6 +103,26 @@ class TaskService
         });
     }
 
+    public function destroyCascade(Task $task): void
+    {
+        DB::transaction(function () use ($task) {
+            $ids = $this->descendantIds($task);
+            $ids[] = $task->id;
+
+            $this->reminders->cancelPendingForTasks($ids);
+
+            foreach (array_reverse($ids) as $id) {
+                $row = Task::query()->find($id);
+                if (! $row) {
+                    continue;
+                }
+                $row->events()->detach();
+                $row->advances()->detach();
+                $row->delete();
+            }
+        });
+    }
+
     public function linkEvent(Task $task, int $eventId): void
     {
         $task->events()->syncWithoutDetaching([$eventId]);

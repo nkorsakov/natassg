@@ -261,6 +261,10 @@ export function useSkyDeskStore() {
         router.post(`/tasks/${id}/close`, {}, visitOpts);
     };
 
+    const removeTask = (id) => {
+        router.delete(`/tasks/${id}`, visitOpts);
+    };
+
     const linkTaskEvent = (taskId, eventId) => {
         router.post(`/tasks/${taskId}/events`, { event_id: eventId }, visitOpts);
     };
@@ -570,6 +574,7 @@ export function useSkyDeskStore() {
         updateTask,
         makeTaskRoot,
         closeTaskCascade,
+        removeTask,
         linkTaskEvent,
         unlinkTaskEvent,
         createEvent,
