@@ -192,6 +192,7 @@ class SettingsController extends Controller
             'label' => ['sometimes', 'string', 'max:255'],
             'color' => ['sometimes', 'string', 'max:32'],
             'icon' => ['nullable', 'string', 'max:64'],
+            'is_default' => ['sometimes', 'boolean'],
         ]);
 
         if (isset($data['label'])) {
@@ -202,6 +203,15 @@ class SettingsController extends Controller
         }
         if ($key === 'taskTypes' && array_key_exists('icon', $data)) {
             $item->icon = $data['icon'];
+        }
+
+        if (array_key_exists('is_default', $data) && $this->dictSupportsDefault($key)) {
+            if ($data['is_default']) {
+                $model::query()->where('is_default', true)->update(['is_default' => false]);
+                $item->is_default = true;
+            } elseif ($item->is_default) {
+                return back()->withErrors(['dict' => 'Сначала назначьте другой статус по умолчанию.']);
+            }
         }
 
         $item->save();
@@ -225,13 +235,28 @@ class SettingsController extends Controller
             ]);
         }
 
+        $wasDefault = $this->dictSupportsDefault($key) && (bool) $item->is_default;
+
         try {
             $item->delete();
         } catch (\Throwable $e) {
             return back()->withErrors(['dict' => 'Не удалось удалить: элемент ещё связан с данными.']);
         }
 
+        if ($wasDefault) {
+            $fallback = $model::query()->orderBy('sort')->orderBy('id')->first();
+            if ($fallback) {
+                $fallback->is_default = true;
+                $fallback->save();
+            }
+        }
+
         return back();
+    }
+
+    protected function dictSupportsDefault(string $key): bool
+    {
+        return in_array($key, ['statuses', 'advanceStatuses'], true);
     }
 
     protected function dictUsageCount(string $key, mixed $item): int

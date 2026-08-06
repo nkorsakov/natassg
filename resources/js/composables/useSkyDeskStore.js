@@ -110,6 +110,17 @@ export function useSkyDeskStore() {
     const getExpenseArticle = (id) => dictById(dictionaries.value.expenseArticles, id);
     const getDisbursementMethod = (id) => dictById(dictionaries.value.disbursementMethods, id);
 
+    const defaultDictId = (list, legacySlug) => {
+        const items = list || [];
+        return items.find((s) => s.is_default)?.id
+            || items.find((s) => s.id === legacySlug)?.id
+            || items[0]?.id
+            || legacySlug;
+    };
+
+    const defaultTaskStatusId = () => defaultDictId(dictionaries.value.statuses, 'new');
+    const defaultAdvanceStatusId = () => defaultDictId(dictionaries.value.advanceStatuses, 'pending');
+
     const getTask = (id) => tasks.value.find((t) => String(t.id) === String(id)) ?? null;
     const getEvent = (id) => events.value.find((e) => String(e.id) === String(id)) ?? null;
     const getAdvance = (id) => advances.value.find((a) => String(a.id) === String(id)) ?? null;
@@ -218,7 +229,7 @@ export function useSkyDeskStore() {
                     ? String(payload.title ?? '').trim()
                     : 'Новое поручение',
                 parent_id: payload.parent_id ?? null,
-                status_id: payload.status_id || 'new',
+                status_id: payload.status_id || defaultTaskStatusId(),
                 priority_id: payload.priority_id || 'normal',
                 type_id: payload.type_id || 'purchase',
                 deadline: payload.deadline ?? null,
@@ -295,7 +306,7 @@ export function useSkyDeskStore() {
                 task_id: payload.task_id ?? null,
                 task_ids: payload.task_ids ?? null,
                 amount: Number(payload.amount) || 0,
-                status_id: payload.status_id || 'pending',
+                status_id: payload.status_id || defaultAdvanceStatusId(),
                 disbursement_method_id: payload.disbursement_method_id || null,
                 note: payload.note || '',
             }, {
@@ -534,6 +545,8 @@ export function useSkyDeskStore() {
         getAdvanceStatus,
         getExpenseArticle,
         getDisbursementMethod,
+        defaultTaskStatusId,
+        defaultAdvanceStatusId,
         getTask,
         getEvent,
         getAdvance,

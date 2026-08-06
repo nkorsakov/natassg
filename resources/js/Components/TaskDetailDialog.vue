@@ -57,7 +57,7 @@ const task = computed(() => (props.taskId ? store.getTask(props.taskId) : null))
 
 const form = reactive({
     title: '',
-    status_id: 'new',
+    status_id: store.defaultTaskStatusId(),
     priority_id: 'normal',
     type_id: 'purchase',
     deadline: '',
@@ -251,7 +251,6 @@ const onAdd = async (id) => {
         const child = await store.createTask({
             title: '',
             parent_id: props.taskId,
-            status_id: 'new',
         });
         if (child?.id) emit('open-task', child.id);
     } else if (id === 'event') {

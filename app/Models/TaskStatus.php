@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskStatus extends Model
 {
-    protected $fillable = ['slug', 'label', 'color', 'sort', 'is_system'];
+    protected $fillable = ['slug', 'label', 'color', 'sort', 'is_system', 'is_default'];
 
     protected function casts(): array
     {
-        return ['is_system' => 'boolean'];
+        return [
+            'is_system' => 'boolean',
+            'is_default' => 'boolean',
+        ];
     }
 
     public function tasks(): HasMany

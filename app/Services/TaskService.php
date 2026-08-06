@@ -16,7 +16,7 @@ class TaskService
 
     public function create(User $user, array $data): Task
     {
-        $statusId = DictionaryResolver::statusId($data['status_id'] ?? 'new');
+        $statusId = DictionaryResolver::statusId($data['status_id'] ?? DictionaryResolver::defaultTaskStatusSlug());
         $priorityId = DictionaryResolver::priorityId($data['priority_id'] ?? 'normal');
         $typeId = DictionaryResolver::taskTypeId($data['type_id'] ?? 'purchase');
 

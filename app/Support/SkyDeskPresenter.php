@@ -49,6 +49,7 @@ class SkyDeskPresenter
             'icon' => $r->icon ?? null,
             'sort' => $r->sort,
             'is_system' => (bool) $r->is_system,
+            'is_default' => (bool) ($r->is_default ?? false),
         ])->values();
 
         return [

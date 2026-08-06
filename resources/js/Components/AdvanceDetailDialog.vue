@@ -52,7 +52,7 @@ const supplierItems = computed(() =>
 const form = reactive({
     title: '',
     amount: '',
-    status_id: 'pending',
+    status_id: store.defaultAdvanceStatusId(),
     task_ids: [],
     disbursement_method_id: null,
     note: '',
@@ -111,7 +111,7 @@ watch(
             const prefill = props.createPrefill || {};
             form.title = prefill.title || '';
             form.amount = prefill.amount != null && Number(prefill.amount) ? prefill.amount : '';
-            form.status_id = prefill.status_id || 'pending';
+            form.status_id = prefill.status_id || store.defaultAdvanceStatusId();
             form.task_ids = [...(prefill.task_ids || (prefill.task_id ? [prefill.task_id] : []))];
             form.disbursement_method_id = prefill.disbursement_method_id || null;
             form.note = prefill.note || '';
@@ -164,14 +164,14 @@ watch(
             if (!(Number(form.amount) > 0)) {
                 window.alert('Перед получением укажите сумму больше нуля.');
                 skipWatch.value = true;
-                form.status_id = advance.value?.status_id || 'pending';
+                form.status_id = advance.value?.status_id || store.defaultAdvanceStatusId();
                 nextTick(() => { skipWatch.value = false; });
                 return;
             }
             if (!form.disbursement_method_id) {
                 window.alert('Укажите способ выдачи (перевод / наличка).');
                 skipWatch.value = true;
-                form.status_id = advance.value?.status_id || 'pending';
+                form.status_id = advance.value?.status_id || store.defaultAdvanceStatusId();
                 nextTick(() => { skipWatch.value = false; });
                 return;
             }
@@ -202,7 +202,7 @@ watch(
         if (form.status_id === 'closed' && advance.value?.status_id !== 'closed') {
             window.alert('Закрывайте через «в кошелёк» или «списание без отчёта».');
             skipWatch.value = true;
-            form.status_id = advance.value?.status_id || 'pending';
+            form.status_id = advance.value?.status_id || store.defaultAdvanceStatusId();
             nextTick(() => { skipWatch.value = false; });
             return;
         }
@@ -236,7 +236,7 @@ const saveCreate = async () => {
         const adv = await store.createAdvance({
             title: form.title.trim(),
             amount: Number(form.amount) || 0,
-            status_id: form.status_id || 'pending',
+            status_id: form.status_id || store.defaultAdvanceStatusId(),
             task_ids: form.task_ids,
             disbursement_method_id: form.disbursement_method_id,
             note: form.note,

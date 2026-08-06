@@ -29,7 +29,6 @@ const save = async () => {
             title: title.value.trim(),
             parent_id: props.parentId,
             event_id: props.eventId || null,
-            status_id: 'new',
         });
         model.value = false;
         emit('created', task?.id);

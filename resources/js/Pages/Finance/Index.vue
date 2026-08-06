@@ -182,7 +182,7 @@ const createAdvance = () => {
     openAdvanceCreate({
         title: '',
         amount: 0,
-        status_id: 'pending',
+        status_id: store.defaultAdvanceStatusId(),
     });
 };
 

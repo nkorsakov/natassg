@@ -18,6 +18,17 @@ class DictionaryResolver
         return self::resolve(TaskStatus::class, $value);
     }
 
+    /** Slug статуса поручения по умолчанию (для новых записей). */
+    public static function defaultTaskStatusSlug(): string
+    {
+        return self::defaultSlug(TaskStatus::class, 'new');
+    }
+
+    public static function defaultTaskStatusId(): int
+    {
+        return self::resolveRequired(TaskStatus::class, self::defaultTaskStatusSlug());
+    }
+
     public static function priorityId(string|int|null $value): ?int
     {
         return self::resolve(TaskPriority::class, $value);
@@ -36,6 +47,17 @@ class DictionaryResolver
     public static function advanceStatusId(string|int|null $value): ?int
     {
         return self::resolve(AdvanceStatus::class, $value);
+    }
+
+    /** Slug статуса аванса по умолчанию (для новых записей). */
+    public static function defaultAdvanceStatusSlug(): string
+    {
+        return self::defaultSlug(AdvanceStatus::class, 'pending');
+    }
+
+    public static function defaultAdvanceStatusId(): int
+    {
+        return self::resolveRequired(AdvanceStatus::class, self::defaultAdvanceStatusSlug());
     }
 
     public static function expenseArticleId(string|int|null $value): ?int
@@ -70,6 +92,29 @@ class DictionaryResolver
     /**
      * @param  class-string  $model
      */
+    protected static function defaultSlug(string $model, string $legacyFallback): string
+    {
+        $slug = $model::query()->where('is_default', true)->orderBy('sort')->value('slug');
+        if ($slug) {
+            return (string) $slug;
+        }
+
+        $slug = $model::query()->where('slug', $legacyFallback)->value('slug');
+        if ($slug) {
+            return (string) $slug;
+        }
+
+        $slug = $model::query()->orderBy('sort')->orderBy('id')->value('slug');
+        if (! $slug) {
+            throw new InvalidArgumentException('В справочнике статусов нет ни одного пункта.');
+        }
+
+        return (string) $slug;
+    }
+
+    /**
+     * @param  class-string  $model
+     */
     protected static function resolve(string $model, string|int|null $value): ?int
     {
         if ($value === null || $value === '') {
@@ -89,5 +134,18 @@ class DictionaryResolver
         }
 
         return (int) $id;
+    }
+
+    /**
+     * @param  class-string  $model
+     */
+    protected static function resolveRequired(string $model, string|int $value): int
+    {
+        $id = self::resolve($model, $value);
+        if ($id === null) {
+            throw new InvalidArgumentException("Неизвестное значение словаря: {$value}");
+        }
+
+        return $id;
     }
 }

@@ -27,6 +27,13 @@ class DictionarySeeder extends Seeder
         foreach ($statuses as $row) {
             TaskStatus::updateOrCreate(['slug' => $row['slug']], $row);
         }
+        if (! TaskStatus::query()->where('is_default', true)->exists()) {
+            $fallback = TaskStatus::query()->where('slug', 'new')->first()
+                ?? TaskStatus::query()->orderBy('sort')->orderBy('id')->first();
+            if ($fallback) {
+                $fallback->update(['is_default' => true]);
+            }
+        }
 
         $priorities = [
             ['slug' => 'normal', 'label' => 'Обычный', 'color' => '#9A9BA3', 'sort' => 10, 'is_system' => true],
@@ -65,6 +72,13 @@ class DictionarySeeder extends Seeder
         ];
         foreach ($advanceStatuses as $row) {
             AdvanceStatus::updateOrCreate(['slug' => $row['slug']], $row);
+        }
+        if (! AdvanceStatus::query()->where('is_default', true)->exists()) {
+            $fallback = AdvanceStatus::query()->where('slug', 'pending')->first()
+                ?? AdvanceStatus::query()->orderBy('sort')->orderBy('id')->first();
+            if ($fallback) {
+                $fallback->update(['is_default' => true]);
+            }
         }
         AdvanceStatus::query()->whereIn('slug', ['approved', 'issued'])->delete();
 

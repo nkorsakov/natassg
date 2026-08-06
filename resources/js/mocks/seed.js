@@ -9,7 +9,7 @@ export const seedProfile = {
 export const seedDictionaries = {
     statuses: [
         { id: 'draft', label: 'Черновик', color: '#9A9BA3' },
-        { id: 'new', label: 'Новое', color: '#37A878' },
+        { id: 'new', label: 'Новое', color: '#37A878', is_default: true },
         { id: 'in_progress', label: 'В работе', color: '#6957EE' },
         { id: 'waiting_money', label: 'Ждёт денег', color: '#FFAD4D' },
         { id: 'waiting', label: 'Ждёт кого-то', color: '#5B8DEF' },
@@ -34,7 +34,7 @@ export const seedDictionaries = {
         { id: 'other', label: 'Другое', color: '#9A9BA3' },
     ],
     advanceStatuses: [
-        { id: 'pending', label: 'Заявка', color: '#FFAD4D' },
+        { id: 'pending', label: 'Заявка', color: '#FFAD4D', is_default: true },
         { id: 'received', label: 'Деньги получены', color: '#6957EE' },
         { id: 'reporting', label: 'На отчёте', color: '#0D9488' },
         { id: 'closed', label: 'Закрыта', color: '#626571' },

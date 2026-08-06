@@ -27,7 +27,7 @@ class AdvanceService
 
     public function create(User $user, array $data): Advance
     {
-        $statusSlug = $this->normalizeStatusSlug($data['status_id'] ?? 'pending');
+        $statusSlug = $this->normalizeStatusSlug($data['status_id'] ?? DictionaryResolver::defaultAdvanceStatusSlug());
 
         $amountMinor = array_key_exists('amount_minor', $data)
             ? (int) $data['amount_minor']

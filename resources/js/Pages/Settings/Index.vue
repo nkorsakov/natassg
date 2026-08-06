@@ -50,11 +50,11 @@ const supplierDraft = reactive({
 });
 
 const dictTabs = [
-    { value: 'statuses', label: 'Статусы', dictKey: 'statuses' },
+    { value: 'statuses', label: 'Статусы', dictKey: 'statuses', withDefault: true },
     { value: 'priorities', label: 'Приоритеты', dictKey: 'priorities' },
     { value: 'taskTypes', label: 'Типы поручений', dictKey: 'taskTypes', withIcon: true },
     { value: 'eventTypes', label: 'Типы событий', dictKey: 'eventTypes' },
-    { value: 'advanceStatuses', label: 'Статусы авансов', dictKey: 'advanceStatuses' },
+    { value: 'advanceStatuses', label: 'Статусы авансов', dictKey: 'advanceStatuses', withDefault: true },
     { value: 'expenseArticles', label: 'Статьи расходов', dictKey: 'expenseArticles' },
     { value: 'disbursementMethods', label: 'Способы выдачи', dictKey: 'disbursementMethods' },
     { value: 'suppliers', label: 'Поставщики' },
@@ -221,6 +221,7 @@ const logout = () => {
                                 :dict-key="tab.dictKey"
                                 embedded
                                 :with-icon="!!tab.withIcon"
+                                :with-default="!!tab.withDefault"
                             />
                         </v-tabs-window-item>
 

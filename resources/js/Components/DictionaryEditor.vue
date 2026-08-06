@@ -7,6 +7,8 @@ const props = defineProps({
     dictKey: { type: String, required: true },
     title: { type: String, default: '' },
     withIcon: { type: Boolean, default: false },
+    /** Можно выбрать пункт «для новых записей» */
+    withDefault: { type: Boolean, default: false },
     /** Без внешней карточки и заголовка — для вкладок */
     embedded: { type: Boolean, default: false },
 });
@@ -81,6 +83,11 @@ const save = () => {
     editing.value = null;
 };
 
+const setAsDefault = (item) => {
+    if (!props.withDefault || item.is_default) return;
+    store.updateDictItem(props.dictKey, item.id, { is_default: true });
+};
+
 const remove = (item) => {
     if (items.value.length <= 1) {
         window.alert('В справочнике должен остаться хотя бы один элемент.');
@@ -88,7 +95,9 @@ const remove = (item) => {
     }
     const name = item.label || 'элемент';
     let message = `Удалить «${name}» из справочника?`;
-    if (item.is_system) {
+    if (item.is_default) {
+        message += '\n\nЭто статус по умолчанию для новых записей. После удаления дефолт перейдёт на другой пункт.';
+    } else if (item.is_system) {
         message += '\n\nЭто системный пункт. Если он уже используется в поручениях, событиях или финансах — удаление не пройдёт, пока записи не перенесёте на другой.';
     } else {
         message += '\n\nЕсли пункт уже используется в данных, удаление будет отклонено.';
@@ -110,6 +119,10 @@ const remove = (item) => {
                 Добавить
             </v-btn>
         </div>
+
+        <p v-if="withDefault" class="text-caption text-medium-emphasis px-4 pb-1 mb-0">
+            Звезда отмечает статус для новых записей. Нажмите на звезду у другого пункта, чтобы сменить.
+        </p>
 
         <div :class="embedded ? 'px-2 pb-3' : 'px-3 pb-3'">
             <div
@@ -135,9 +148,30 @@ const remove = (item) => {
                     />
                 </div>
                 <div class="flex-grow-1">
-                    <div class="text-body-2 font-weight-bold">{{ item.label }}</div>
+                    <div class="d-flex align-center ga-2">
+                        <div class="text-body-2 font-weight-bold">{{ item.label }}</div>
+                        <v-chip
+                            v-if="withDefault && item.is_default"
+                            size="x-small"
+                            color="primary"
+                            variant="tonal"
+                        >
+                            Для новых
+                        </v-chip>
+                    </div>
                     <div class="text-caption text-medium-emphasis">{{ item.color }}</div>
                 </div>
+                <v-btn
+                    v-if="withDefault"
+                    icon
+                    variant="text"
+                    size="small"
+                    :color="item.is_default ? 'primary' : undefined"
+                    :title="item.is_default ? 'Статус по умолчанию' : 'Сделать статусом по умолчанию'"
+                    @click="setAsDefault(item)"
+                >
+                    <v-icon size="18">{{ item.is_default ? 'mdi-star' : 'mdi-star-outline' }}</v-icon>
+                </v-btn>
                 <v-btn icon variant="text" size="small" @click="startEdit(item)">
                     <v-icon size="18">mdi-pencil-outline</v-icon>
                 </v-btn>
