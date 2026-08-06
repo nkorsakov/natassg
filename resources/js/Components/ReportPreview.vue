@@ -73,19 +73,11 @@ const movementTone = (tx) => {
 const moneyTiles = computed(() => [
     {
         key: 'open',
-        label: 'Входящий',
+        label: 'Входящий остаток',
         value: formatMoney(finance.value.opening_on_hand),
         icon: 'mdi-tray-arrow-down',
         bg: 'rgba(105, 87, 238, 0.12)',
         color: '#6957EE',
-    },
-    {
-        key: 'close',
-        label: 'Исходящий',
-        value: formatMoney(finance.value.closing_on_hand),
-        icon: 'mdi-tray-arrow-up',
-        bg: 'rgba(91, 141, 239, 0.14)',
-        color: '#5B8DEF',
     },
     {
         key: 'in',
@@ -102,6 +94,14 @@ const moneyTiles = computed(() => [
         icon: 'mdi-arrow-up-bold-circle-outline',
         bg: 'rgba(233, 102, 103, 0.14)',
         color: '#E96667',
+    },
+    {
+        key: 'close',
+        label: 'Исходящий остаток',
+        value: formatMoney(finance.value.closing_on_hand),
+        icon: 'mdi-tray-arrow-up',
+        bg: 'rgba(91, 141, 239, 0.14)',
+        color: '#5B8DEF',
     },
 ]);
 
@@ -138,14 +138,16 @@ const toggle = (id) => emit('toggle-task', id);
                     v-for="tile in moneyTiles"
                     :key="tile.key"
                     class="report-preview__tile"
-                    :style="{ background: tile.bg }"
+                    :style="{ '--tile-bg': tile.bg, '--tile-color': tile.color }"
                 >
-                    <div class="report-preview__tile-icon" :style="{ color: tile.color }">
+                    <div class="report-preview__tile-icon">
                         <v-icon size="18" :icon="tile.icon" />
                     </div>
-                    <div class="text-caption text-medium-emphasis">{{ tile.label }}</div>
-                    <div class="report-preview__tile-value" :style="{ color: tile.color }">
-                        {{ tile.value }}
+                    <div class="report-preview__tile-body">
+                        <div class="report-preview__tile-label">{{ tile.label }}</div>
+                        <div class="report-preview__tile-value">
+                            {{ tile.value }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -427,34 +429,107 @@ const toggle = (id) => emit('toggle-task', id);
 }
 
 .report-preview__tiles {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-}
-
-@media (min-width: 700px) {
-    .report-preview__tiles {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    background: rgb(var(--v-theme-surface));
 }
 
 .report-preview__tile {
-    border-radius: 16px;
-    padding: 14px 14px 12px;
-    min-height: 92px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    min-height: 64px;
+    background: color-mix(in srgb, var(--tile-bg) 70%, transparent);
+    border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.report-preview__tile:first-child {
+    border-top: 0;
 }
 
 .report-preview__tile-icon {
-    margin-bottom: 8px;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    color: var(--tile-color);
+    background: color-mix(in srgb, var(--tile-color) 16%, transparent);
+}
+
+.report-preview__tile-body {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.report-preview__tile-label {
+    font-size: 0.8rem;
+    color: rgba(var(--v-theme-on-surface), 0.65);
 }
 
 .report-preview__tile-value {
     font-family: Fraunces, Georgia, serif;
     font-weight: 700;
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     letter-spacing: -0.02em;
-    margin-top: 2px;
     line-height: 1.2;
+    color: var(--tile-color);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 700px) {
+    .report-preview__tiles {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        border: 0;
+        background: transparent;
+        overflow: visible;
+    }
+
+    .report-preview__tile {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+        border-radius: 16px;
+        border: 0;
+        padding: 14px 14px 12px;
+        min-height: 106px;
+        background: var(--tile-bg);
+    }
+
+    .report-preview__tile-icon {
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        background: transparent;
+        margin-bottom: 8px;
+        display: block;
+        place-items: unset;
+    }
+
+    .report-preview__tile-body {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 2px;
+        width: 100%;
+    }
+
+    .report-preview__tile-value {
+        font-size: 1.15rem;
+        text-align: left;
+    }
 }
 
 .report-preview__block {
