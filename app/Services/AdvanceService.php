@@ -2,33 +2,23 @@
 
 namespace App\Services;
 
+use App\Enums\AdvanceStatus;
 use App\Models\Advance;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Support\DictionaryResolver;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class AdvanceService
 {
-    /** @var array<string, list<string>> */
-    protected const TRANSITIONS = [
-        'pending' => ['received', 'closed'],
-        'received' => ['reporting', 'closed', 'pending'],
-        'reporting' => ['received', 'closed', 'pending'],
-        'closed' => [],
-        // legacy aliases mapped before transition check
-        'issued' => ['reporting', 'closed', 'pending'],
-        'approved' => ['received', 'closed', 'pending'],
-    ];
-
     public function __construct(protected FinanceLedger $ledger) {}
 
     public function create(User $user, array $data): Advance
     {
-        $statusSlug = $this->normalizeStatusSlug($data['status_id'] ?? DictionaryResolver::defaultAdvanceStatusSlug());
-
         $amountMinor = array_key_exists('amount_minor', $data)
             ? (int) $data['amount_minor']
             : DictionaryResolver::rublesToMinor($data['amount'] ?? 0);
@@ -38,22 +28,14 @@ class AdvanceService
             $methodId = DictionaryResolver::disbursementMethodId($data['disbursement_method_id']);
         }
 
-        if ($statusSlug === 'received') {
-            if ($amountMinor <= 0) {
-                throw new InvalidArgumentException('Перед получением укажите сумму больше нуля');
-            }
-            if (! $methodId) {
-                throw new InvalidArgumentException('Укажите способ выдачи');
-            }
-        }
-
         $advance = Advance::create([
             'user_id' => $user->id,
-            'status_id' => DictionaryResolver::advanceStatusId($statusSlug),
+            'status' => AdvanceStatus::Pending,
             'disbursement_method_id' => $methodId,
             'title' => array_key_exists('title', $data) ? (string) ($data['title'] ?? '') : '',
             'amount_minor' => $amountMinor,
             'note' => $data['note'] ?? null,
+            'needed_at' => $this->normalizeDate($data['needed_at'] ?? null, 'нужна к'),
         ]);
 
         $taskIds = $this->normalizeTaskIds($data, $user);
@@ -61,70 +43,21 @@ class AdvanceService
             $advance->tasks()->sync($taskIds);
         }
 
-        if ($statusSlug === 'received') {
-            $this->markReceived($advance->fresh(['status']));
-        }
-
-        return $advance->fresh(['status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
+        return $this->freshAdvance($advance);
     }
 
     public function update(Advance $advance, array $data): Advance
     {
         return DB::transaction(function () use ($advance, $data) {
             $advance = Advance::whereKey($advance->id)->lockForUpdate()->firstOrFail();
-            $advance->load('status');
+            $status = $advance->statusEnum();
+            $wasFunded = $status->isFunded() || $this->ledger->hasIncomeForAdvance($advance->id);
 
-            $previousSlug = $this->normalizeStatusSlug($advance->status?->slug);
-            $wasReceived = in_array($previousSlug, ['received', 'reporting', 'closed'], true)
-                || $this->ledger->hasIncomeForAdvance($advance->id);
-
-            if (isset($data['status_id'])) {
-                $newSlug = $this->normalizeStatusSlug(
-                    is_numeric($data['status_id'])
-                        ? (\App\Models\AdvanceStatus::query()->whereKey((int) $data['status_id'])->value('slug') ?? null)
-                        : (string) $data['status_id']
-                );
-
-                if (! $newSlug) {
-                    throw new InvalidArgumentException('Неизвестный статус аванса');
-                }
-
-                $this->assertTransition($previousSlug, $newSlug);
-
-                if ($newSlug === 'received') {
-                    $amountForReceive = array_key_exists('amount', $data) || array_key_exists('amount_minor', $data)
-                        ? (array_key_exists('amount_minor', $data)
-                            ? (int) $data['amount_minor']
-                            : DictionaryResolver::rublesToMinor($data['amount']))
-                        : (int) $advance->amount_minor;
-
-                    $methodId = array_key_exists('disbursement_method_id', $data)
-                        ? DictionaryResolver::disbursementMethodId($data['disbursement_method_id'])
-                        : $advance->disbursement_method_id;
-
-                    if ($amountForReceive <= 0) {
-                        throw new InvalidArgumentException('Перед получением укажите сумму больше нуля');
-                    }
-                    if (! $methodId) {
-                        throw new InvalidArgumentException('Укажите способ выдачи');
-                    }
-
-                    $advance->amount_minor = $amountForReceive;
-                    $advance->disbursement_method_id = $methodId;
-                }
-
-                if ($newSlug === 'closed') {
-                    throw new InvalidArgumentException('Закрывайте аванс через «в кошелёк» или «списание без отчёта»');
-                }
-
-                $advance->status_id = DictionaryResolver::advanceStatusId($newSlug);
-
-                if ($previousSlug === 'closed' && $newSlug !== 'closed') {
-                    $advance->closed_at = null;
-                }
+            if (array_key_exists('status_id', $data) || array_key_exists('status', $data)) {
+                throw new InvalidArgumentException('Статус меняется только кнопками «Утвердили» / «Получены» / закрытием');
             }
 
-            if (array_key_exists('disbursement_method_id', $data) && ! isset($data['status_id'])) {
+            if (array_key_exists('disbursement_method_id', $data)) {
                 $advance->disbursement_method_id = $data['disbursement_method_id']
                     ? DictionaryResolver::disbursementMethodId($data['disbursement_method_id'])
                     : null;
@@ -138,6 +71,10 @@ class AdvanceService
                 $advance->note = $data['note'];
             }
 
+            if (array_key_exists('needed_at', $data)) {
+                $advance->needed_at = $this->normalizeDate($data['needed_at'], 'нужна к');
+            }
+
             $newAmount = null;
             if (array_key_exists('amount_minor', $data)) {
                 $newAmount = (int) $data['amount_minor'];
@@ -146,7 +83,7 @@ class AdvanceService
             }
 
             if ($newAmount !== null && $newAmount !== (int) $advance->amount_minor) {
-                if ($wasReceived && $this->ledger->hasIncomeForAdvance($advance->id)) {
+                if ($wasFunded && $this->ledger->hasIncomeForAdvance($advance->id)) {
                     $delta = $newAmount - (int) $advance->amount_minor;
                     $advance->amount_minor = $newAmount;
                     $advance->save();
@@ -162,36 +99,75 @@ class AdvanceService
             }
 
             $advance->save();
-            $advance->load('status');
-
-            if ($previousSlug !== 'received' && $advance->status?->slug === 'received') {
-                $this->markReceived($advance);
-            }
 
             $taskIds = $this->normalizeTaskIds($data, $advance->user);
             if ($taskIds !== null) {
                 $advance->tasks()->sync($taskIds);
             }
 
-            return $advance->fresh(['status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
+            return $this->freshAdvance($advance);
         });
     }
 
-    public function markReceived(Advance $advance): void
+    public function approve(Advance $advance): Advance
     {
-        DB::transaction(function () use ($advance) {
+        return DB::transaction(function () use ($advance) {
             $advance = Advance::whereKey($advance->id)->lockForUpdate()->firstOrFail();
+            if ($advance->statusEnum() !== AdvanceStatus::Pending) {
+                throw new InvalidArgumentException('Утвердить можно только заявку');
+            }
+            $advance->status = AdvanceStatus::Approved;
+            $advance->save();
+
+            return $this->freshAdvance($advance);
+        });
+    }
+
+    /**
+     * Receive money: only from approved. Posts income and moves to reporting.
+     *
+     * @param  array{issued_at?: mixed, disbursement_method_id?: mixed, amount?: mixed, amount_minor?: int|null}  $data
+     */
+    public function receive(Advance $advance, array $data = []): Advance
+    {
+        return DB::transaction(function () use ($advance, $data) {
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['disbursementMethod', 'user'])->firstOrFail();
 
             if ($this->ledger->hasIncomeForAdvance($advance->id)) {
-                return;
+                if ($advance->statusEnum() !== AdvanceStatus::Reporting && $advance->statusEnum() !== AdvanceStatus::Closed) {
+                    $advance->status = AdvanceStatus::Reporting;
+                    $advance->save();
+                }
+
+                return $this->freshAdvance($advance);
+            }
+
+            if ($advance->statusEnum() !== AdvanceStatus::Approved) {
+                throw new InvalidArgumentException('Сначала утвердите заявку');
+            }
+
+            if (array_key_exists('amount_minor', $data) && $data['amount_minor'] !== null) {
+                $advance->amount_minor = (int) $data['amount_minor'];
+            } elseif (array_key_exists('amount', $data) && $data['amount'] !== null && $data['amount'] !== '') {
+                $advance->amount_minor = DictionaryResolver::rublesToMinor($data['amount']);
+            }
+
+            if (array_key_exists('disbursement_method_id', $data) && $data['disbursement_method_id']) {
+                $advance->disbursement_method_id = DictionaryResolver::disbursementMethodId($data['disbursement_method_id']);
+                $advance->load('disbursementMethod');
             }
 
             if ((int) $advance->amount_minor <= 0) {
-                throw new InvalidArgumentException('Сумма должна быть больше нуля');
+                throw new InvalidArgumentException('Перед получением укажите сумму больше нуля');
             }
             if (! $advance->disbursement_method_id) {
                 throw new InvalidArgumentException('Укажите способ выдачи');
             }
+
+            $issuedAt = $this->normalizeDate(
+                $data['issued_at'] ?? $advance->issued_at ?? $advance->needed_at ?? now(),
+                'получения'
+            );
 
             $methodSlug = $advance->disbursementMethod?->slug
                 ?? \App\Models\DisbursementMethod::query()->whereKey($advance->disbursement_method_id)->value('slug');
@@ -203,14 +179,17 @@ class AdvanceService
                 (int) $advance->amount_minor,
                 [
                     'advance_id' => $advance->id,
+                    'occurred_at' => $issuedAt,
                     'meta' => ['disbursement_method_id' => $methodSlug],
                 ]
             );
 
-            $advance->status_id = DictionaryResolver::advanceStatusId('received');
-            $advance->issued_at = $advance->issued_at ?? now();
+            $advance->status = AdvanceStatus::Reporting;
+            $advance->issued_at = $issuedAt;
             $advance->closed_at = null;
             $advance->save();
+
+            return $this->freshAdvance($advance);
         });
     }
 
@@ -221,7 +200,6 @@ class AdvanceService
             ->sum('amount_minor');
     }
 
-    /** Остаток на счёте аванса по леджеру. */
     public function remainingMinor(Advance $advance): int
     {
         return $this->ledger->advanceBalanceMinor($advance->id);
@@ -230,7 +208,7 @@ class AdvanceService
     public function closeToWallet(Advance $advance): void
     {
         DB::transaction(function () use ($advance) {
-            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with('status')->firstOrFail();
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->firstOrFail();
             $this->assertOpenForClose($advance);
 
             $rem = $this->remainingMinor($advance);
@@ -253,48 +231,16 @@ class AdvanceService
         });
     }
 
-    public function closeWriteOff(Advance $advance): void
-    {
-        DB::transaction(function () use ($advance) {
-            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with('status')->firstOrFail();
-            $this->assertOpenForClose($advance);
-
-            $rem = $this->remainingMinor($advance);
-            if ($rem <= 0) {
-                $this->markClosed($advance);
-
-                return;
-            }
-
-            $this->ledger->apply($advance->user, WalletTransaction::TYPE_EXPENSE, WalletTransaction::ACCOUNT_ADVANCE, -$rem, [
-                'advance_id' => $advance->id,
-                'meta' => ['kind' => 'close_writeoff'],
-            ]);
-
-            $this->markClosed($advance);
-        });
-    }
-
     public function maybeAutoClose(Advance $advance): void
     {
         $advance->refresh();
-        $advance->load('status');
 
-        if (! in_array($advance->status?->slug, ['received', 'reporting'], true)) {
+        if ($advance->statusEnum() !== AdvanceStatus::Reporting) {
             return;
         }
 
         if ($this->remainingMinor($advance) === 0) {
             $this->markClosed($advance);
-        }
-    }
-
-    public function markReportingIfNeeded(Advance $advance): void
-    {
-        $advance->loadMissing('status');
-        if ($advance->status?->slug === 'received') {
-            $advance->status_id = DictionaryResolver::advanceStatusId('reporting');
-            $advance->save();
         }
     }
 
@@ -313,11 +259,11 @@ class AdvanceService
         DB::transaction(function () use ($advance) {
             $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['expenses.receipts', 'user'])->firstOrFail();
             $owner = $advance->user;
-            $wallet = \App\Models\Wallet::query()->firstOrCreate(
+            $wallet = Wallet::query()->firstOrCreate(
                 ['user_id' => $owner->id],
                 ['balance_minor' => 0, 'currency' => 'RUB'],
             );
-            $wallet = \App\Models\Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
+            $wallet = Wallet::whereKey($wallet->id)->lockForUpdate()->firstOrFail();
 
             $expenseIds = $advance->expenses->pluck('id')->all();
 
@@ -343,7 +289,7 @@ class AdvanceService
 
             foreach ($advance->expenses as $expense) {
                 foreach ($expense->receipts as $receipt) {
-                    \Illuminate\Support\Facades\Storage::disk('public')->delete($receipt->path);
+                    Storage::disk('public')->delete($receipt->path);
                     $receipt->delete();
                 }
             }
@@ -365,45 +311,37 @@ class AdvanceService
 
     protected function markClosed(Advance $advance): void
     {
-        $advance->status_id = DictionaryResolver::advanceStatusId('closed');
+        $advance->status = AdvanceStatus::Closed;
         $advance->closed_at = now();
         $advance->save();
     }
 
     protected function assertOpenForClose(Advance $advance): void
     {
-        $slug = $advance->status?->slug;
-        if (! in_array($slug, ['received', 'reporting'], true)) {
-            throw new InvalidArgumentException('Закрытие доступно только для полученных авансов');
+        if (! $advance->statusEnum()->allowsClose()) {
+            throw new InvalidArgumentException('Закрытие доступно только для авансов на отчёте');
         }
         if (! $this->ledger->hasIncomeForAdvance($advance->id)) {
             throw new InvalidArgumentException('Аванс ещё не получен');
         }
     }
 
-    protected function assertTransition(?string $from, string $to): void
+    protected function normalizeDate(mixed $value, string $label = 'даты'): ?\Carbon\CarbonInterface
     {
-        if ($from === null || $from === $to) {
-            return;
-        }
-
-        $allowed = self::TRANSITIONS[$from] ?? [];
-        if (! in_array($to, $allowed, true)) {
-            throw new InvalidArgumentException("Нельзя перейти из «{$from}» в «{$to}»");
-        }
-    }
-
-    protected function normalizeStatusSlug(?string $slug): ?string
-    {
-        if ($slug === null) {
+        if ($value === null || $value === '') {
             return null;
         }
 
-        return match ($slug) {
-            'issued' => 'received',
-            'approved' => 'pending',
-            default => $slug,
-        };
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            throw new InvalidArgumentException('Некорректная дата '.$label);
+        }
+    }
+
+    protected function freshAdvance(Advance $advance): Advance
+    {
+        return $advance->fresh(['disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
     }
 
     /**
@@ -425,9 +363,10 @@ class AdvanceService
 
         $owned = ($user->is_admin
             ? Task::query()
-            : $user->tasks()
-        )->whereIn('id', $ids)->pluck('id')->all();
-        if (count($owned) !== $ids->count()) {
+            : Task::query()->where('user_id', $user->id)
+        )->whereIn('id', $ids->all())->pluck('id');
+
+        if ($owned->count() !== $ids->count()) {
             throw new InvalidArgumentException('Поручение не найдено');
         }
 

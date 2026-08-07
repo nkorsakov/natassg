@@ -70,8 +70,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/advances', [FinanceController::class, 'storeAdvance'])->name('advances.store');
     Route::put('/advances/{advance}', [FinanceController::class, 'updateAdvance'])->name('advances.update');
     Route::delete('/advances/{advance}', [FinanceController::class, 'destroyAdvance'])->name('advances.destroy');
+    Route::post('/advances/{advance}/approve', [FinanceController::class, 'approveAdvance'])->name('advances.approve');
+    Route::post('/advances/{advance}/receive', [FinanceController::class, 'receiveAdvance'])->name('advances.receive');
     Route::post('/advances/{advance}/close-to-wallet', [FinanceController::class, 'closeToWallet'])->name('advances.close-to-wallet');
-    Route::post('/advances/{advance}/close-writeoff', [FinanceController::class, 'closeWriteOff'])->name('advances.close-writeoff');
     Route::post('/advances/{advance}/expenses', [FinanceController::class, 'storeExpense'])->name('advances.expenses.store');
     Route::post('/advances/{advance}/expenses/{expense}/attach', [FinanceController::class, 'attachExpense'])->name('advances.expenses.attach');
     Route::post('/advances/{advance}/expenses/{expense}/detach', [FinanceController::class, 'detachExpense'])->name('advances.expenses.detach');

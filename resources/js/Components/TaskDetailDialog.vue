@@ -181,6 +181,12 @@ const submitComment = () => {
     commentDraft.value = '';
 };
 
+const onCommentDraftKeydown = (e) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    submitComment();
+};
+
 const startEditComment = (comment) => {
     editingCommentId.value = comment.id;
     editingCommentBody.value = comment.body || '';
@@ -197,6 +203,12 @@ const saveEditComment = () => {
     if (!text) return;
     store.updateTaskComment(props.taskId, editingCommentId.value, text);
     cancelEditComment();
+};
+
+const onEditCommentKeydown = (e) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    saveEditComment();
 };
 
 const attachments = computed(() => task.value?.attachments || []);
@@ -577,91 +589,62 @@ const isDone = computed(
                     class="mb-3"
                 />
 
-                <div class="mb-3 pa-3 skydesk-accent-panel">
-                    <div class="d-flex align-center ga-2 mb-2">
-                        <v-icon size="18" color="primary">mdi-comment-text-outline</v-icon>
-                        <div class="text-caption font-weight-bold text-medium-emphasis">Комментарии</div>
-                        <v-chip v-if="comments.length" size="x-small" variant="tonal">{{ comments.length }}</v-chip>
+                <div class="mb-3">
+                    <div class="text-caption font-weight-medium text-medium-emphasis mb-1">
+                        Комментарии
+                        <span v-if="comments.length" class="text-disabled">· {{ comments.length }}</span>
                     </div>
 
-                    <v-textarea
-                        v-model="commentDraft"
-                        placeholder="Новый комментарий…"
-                        rows="2"
-                        auto-grow
-                        density="compact"
-                        hide-details
-                        class="mb-2"
-                        @keydown.ctrl.enter.prevent="submitComment"
-                        @keydown.meta.enter.prevent="submitComment"
-                    />
-                    <div class="d-flex justify-end mb-3">
+                    <div class="d-flex align-end ga-2 mb-2">
+                        <v-textarea
+                            v-model="commentDraft"
+                            placeholder="Написать… Enter — отправить"
+                            rows="1"
+                            max-rows="6"
+                            auto-grow
+                            density="compact"
+                            hide-details
+                            variant="outlined"
+                            class="flex-grow-1"
+                            @keydown="onCommentDraftKeydown"
+                        />
                         <v-btn
+                            icon
                             size="small"
                             color="primary"
+                            variant="tonal"
                             :disabled="!commentDraft.trim()"
+                            aria-label="Отправить"
                             @click="submitComment"
                         >
-                            Добавить
+                            <v-icon size="18">mdi-send</v-icon>
                         </v-btn>
-                    </div>
-
-                    <div v-if="!comments.length" class="text-caption text-medium-emphasis">
-                        Пока нет комментариев
                     </div>
 
                     <div
                         v-for="c in comments"
                         :key="c.id"
                         class="py-2"
-                        style="border-top:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
                     >
-                        <div class="d-flex align-center justify-space-between ga-2 mb-1">
-                            <div class="d-flex align-center ga-2 min-w-0">
-                                <OwnerBadge :show="true" :user="c.user" />
-                                <span class="text-caption text-medium-emphasis text-truncate">
-                                    {{ c.user?.name || 'Пользователь' }}
-                                    · {{ formatDisplayDate(c.created_at) || c.created_at }}
-                                    <span v-if="c.updated_at && c.updated_at !== c.created_at"> · изм.</span>
-                                </span>
-                            </div>
-                            <div v-if="isOwnComment(c)" class="d-flex flex-shrink-0">
-                                <v-btn
-                                    icon
-                                    variant="text"
-                                    size="x-small"
-                                    aria-label="Изменить"
-                                    @click="startEditComment(c)"
-                                >
-                                    <v-icon size="16">mdi-pencil-outline</v-icon>
-                                </v-btn>
-                                <v-btn
-                                    icon
-                                    variant="text"
-                                    size="x-small"
-                                    aria-label="Удалить"
-                                    @click="store.removeTaskComment(props.taskId, c.id)"
-                                >
-                                    <v-icon size="16">mdi-close</v-icon>
-                                </v-btn>
-                            </div>
-                        </div>
-
                         <div v-if="editingCommentId === c.id">
                             <v-textarea
                                 v-model="editingCommentBody"
-                                rows="2"
+                                rows="1"
+                                max-rows="6"
                                 auto-grow
                                 density="compact"
                                 hide-details
-                                class="mb-2"
+                                variant="outlined"
                                 autofocus
+                                @keydown="onEditCommentKeydown"
+                                @keydown.esc.prevent="cancelEditComment"
                             />
-                            <div class="d-flex justify-end ga-2">
+                            <div class="d-flex justify-end ga-1 mt-1">
                                 <v-btn size="x-small" variant="text" @click="cancelEditComment">Отмена</v-btn>
                                 <v-btn
                                     size="x-small"
                                     color="primary"
+                                    variant="text"
                                     :disabled="!editingCommentBody.trim()"
                                     @click="saveEditComment"
                                 >
@@ -669,17 +652,51 @@ const isDone = computed(
                                 </v-btn>
                             </div>
                         </div>
-                        <div v-else class="text-body-2" style="white-space:pre-wrap;word-break:break-word">
-                            <template v-for="(part, idx) in linkifyParts(c.body)" :key="idx">
-                                <a
-                                    v-if="part.type === 'link'"
-                                    :href="part.href"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >{{ part.value }}</a>
-                                <template v-else>{{ part.value }}</template>
-                            </template>
-                        </div>
+                        <template v-else>
+                            <div
+                                class="text-body-2"
+                                :style="{
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                    lineHeight: 1.4,
+                                    cursor: isOwnComment(c) ? 'pointer' : undefined,
+                                }"
+                                @click="isOwnComment(c) && startEditComment(c)"
+                            >
+                                <template v-for="(part, idx) in linkifyParts(c.body)" :key="idx">
+                                    <a
+                                        v-if="part.type === 'link'"
+                                        :href="part.href"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        @click.stop
+                                    >{{ part.value }}</a>
+                                    <template v-else>{{ part.value }}</template>
+                                </template>
+                            </div>
+                            <div class="d-flex align-center ga-1" style="margin-top:2px;min-height:18px">
+                                <span
+                                    class="text-disabled"
+                                    style="font-size:11px;line-height:1.2"
+                                >
+                                    {{ c.user?.name || 'Пользователь' }}
+                                    · {{ formatDisplayDate(c.created_at) || c.created_at }}
+                                    <template v-if="c.updated_at && c.updated_at !== c.created_at"> · изм.</template>
+                                </span>
+                                <v-btn
+                                    v-if="isOwnComment(c)"
+                                    icon
+                                    variant="text"
+                                    size="x-small"
+                                    density="compact"
+                                    class="ml-auto"
+                                    aria-label="Удалить"
+                                    @click="store.removeTaskComment(props.taskId, c.id)"
+                                >
+                                    <v-icon size="14">mdi-close</v-icon>
+                                </v-btn>
+                            </div>
+                        </template>
                     </div>
                 </div>
 

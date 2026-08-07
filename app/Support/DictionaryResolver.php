@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\AdvanceStatus;
 use App\Models\DisbursementMethod;
 use App\Models\EventType;
 use App\Models\ExpenseArticle;
@@ -44,20 +43,10 @@ class DictionaryResolver
         return self::resolve(EventType::class, $value);
     }
 
-    public static function advanceStatusId(string|int|null $value): ?int
-    {
-        return self::resolve(AdvanceStatus::class, $value);
-    }
-
     /** Slug статуса аванса по умолчанию (для новых записей). */
     public static function defaultAdvanceStatusSlug(): string
     {
-        return self::defaultSlug(AdvanceStatus::class, 'pending');
-    }
-
-    public static function defaultAdvanceStatusId(): int
-    {
-        return self::resolveRequired(AdvanceStatus::class, self::defaultAdvanceStatusSlug());
+        return \App\Enums\AdvanceStatus::Pending->value;
     }
 
     public static function expenseArticleId(string|int|null $value): ?int

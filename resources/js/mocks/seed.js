@@ -35,9 +35,9 @@ export const seedDictionaries = {
     ],
     advanceStatuses: [
         { id: 'pending', label: 'Заявка', color: '#FFAD4D', is_default: true },
-        { id: 'received', label: 'Деньги получены', color: '#6957EE' },
+        { id: 'approved', label: 'Утвердили', color: '#6957EE' },
         { id: 'reporting', label: 'На отчёте', color: '#0D9488' },
-        { id: 'closed', label: 'Закрыта', color: '#626571' },
+        { id: 'closed', label: 'Закрыта', color: '#37A878' },
     ],
 };
 
@@ -301,7 +301,7 @@ export const seedAdvances = [
         title: 'Поездка в Москву',
         task_id: 't7',
         amount: 150000,
-        status_id: 'received',
+        status_id: 'reporting',
         note: 'Нераспределенные расходы под отчет',
         created_at: '2026-07-29T12:00:00',
         expense_ids: ['x1'],

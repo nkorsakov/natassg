@@ -7,7 +7,7 @@ import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
 import { useIsAdmin } from '@/composables/useIsAdmin';
 import { dictChipStyle } from '@/utils/dictColor';
 import { prepareUploadFile } from '@/utils/compressImage';
-
+import DateTimeFields from '@/Components/DateTimeFields.vue';
 const store = useSkyDeskStore();
 const { openAdvance, openAdvanceCreate, openTask } = useWorkspaceUi();
 const { isAdmin } = useIsAdmin();
@@ -60,7 +60,7 @@ const formatTxDate = (value) => {
 const filters = [
     { value: 'all', label: 'Все' },
     { value: 'pending', label: 'Заявка' },
-    { value: 'received', label: 'Получены' },
+    { value: 'approved', label: 'Утвердили' },
     { value: 'reporting', label: 'На отчёте' },
     { value: 'closed', label: 'Закрыта' },
 ];
@@ -84,7 +84,7 @@ const debitAccountItems = [
 
 const openAdvanceItems = computed(() =>
     store.advances.value
-        .filter((a) => ['received', 'reporting'].includes(a.status_id))
+        .filter((a) => a.status_id === 'reporting')
         .map((a) => ({
             id: a.id,
             title: a.title || `Аванс #${a.id}`,
@@ -96,8 +96,8 @@ const visibleAdvances = computed(() => {
         ? [...store.advances.value]
         : store.advances.value.filter((a) => a.status_id === filter.value);
     return list.sort((a, b) => {
-        const da = String(a.issued_at || a.created_at || '');
-        const db = String(b.issued_at || b.created_at || '');
+        const da = String(a.needed_at || a.issued_at || a.created_at || '');
+        const db = String(b.needed_at || b.issued_at || b.created_at || '');
         if (da !== db) return db.localeCompare(da);
         return Number(b.id) - Number(a.id);
     });
@@ -107,9 +107,9 @@ const summary = computed(() => {
     const pending = store.advances.value
         .filter((a) => a.status_id === 'pending')
         .reduce((s, a) => s + Number(a.amount || 0), 0);
-    const received = store.advances.value
-        .filter((a) => a.status_id === 'received')
-        .reduce((s, a) => s + Number(a.remaining ?? a.amount ?? 0), 0);
+    const approved = store.advances.value
+        .filter((a) => a.status_id === 'approved')
+        .reduce((s, a) => s + Number(a.amount || 0), 0);
     const reporting = store.advances.value
         .filter((a) => a.status_id === 'reporting')
         .reduce((s, a) => s + Number(a.remaining ?? a.amount ?? 0), 0);
@@ -118,7 +118,7 @@ const summary = computed(() => {
         .reduce((s, a) => s + Number(a.amount || 0), 0);
     return [
         { label: 'Заявки', amount: store.formatMoney(pending), tone: 'orange' },
-        { label: 'Получены', amount: store.formatMoney(received), tone: null },
+        { label: 'Утвердили', amount: store.formatMoney(approved), tone: null },
         { label: 'На отчёте', amount: store.formatMoney(reporting), tone: null },
         { label: 'Закрыто', amount: store.formatMoney(closed), tone: 'green' },
     ];
@@ -182,7 +182,6 @@ const createAdvance = () => {
     openAdvanceCreate({
         title: '',
         amount: 0,
-        status_id: store.defaultAdvanceStatusId(),
     });
 };
 
@@ -471,7 +470,7 @@ const wallet = computed(() => store.wallet.value);
                     @click="openAdvance(adv.id)"
                 >
                     <div class="text-body-2 font-weight-bold text-no-wrap" style="min-width:5.5rem">
-                        {{ formatTxDate(adv.issued_at || adv.created_at) }}
+                        {{ formatTxDate(adv.needed_at || adv.issued_at || adv.created_at) }}
                     </div>
                     <div class="flex-grow-1 min-w-0">
                         <div class="d-flex align-center ga-2">
@@ -519,10 +518,11 @@ const wallet = computed(() => store.wallet.value);
                 </h3>
                 <v-text-field v-model="topUpForm.title" label="Название" class="mb-2" />
                 <v-text-field v-model="topUpForm.amount" type="number" label="Сумма, ₽" min="0" class="mb-2" />
-                <v-text-field
+                <DateTimeFields
                     v-model="topUpForm.occurred_at"
-                    type="date"
-                    label="Дата"
+                    date-label="Дата"
+                    all-day
+                    hide-details
                     class="mb-2"
                 />
                 <v-select
@@ -563,10 +563,11 @@ const wallet = computed(() => store.wallet.value);
                     {{ editingExpenseId ? 'Редактировать расход' : 'Расход' }}
                 </h3>
                 <v-text-field v-model="expenseForm.amount" type="number" label="Сумма, ₽" min="0" class="mb-2" />
-                <v-text-field
+                <DateTimeFields
                     v-model="expenseForm.occurred_at"
-                    type="date"
-                    label="Дата"
+                    date-label="Дата"
+                    all-day
+                    hide-details
                     class="mb-2"
                 />
                 <v-select

@@ -33,11 +33,11 @@ class ExpenseService
     {
         return DB::transaction(function () use ($user, $data, $advance) {
             if ($advance) {
-                $advance = Advance::whereKey($advance->id)->lockForUpdate()->with('status')->firstOrFail();
+                $advance = Advance::whereKey($advance->id)->lockForUpdate()->firstOrFail();
                 if (! $user->canAccessOwned($advance->user_id)) {
                     throw new InvalidArgumentException('Чужой аванс');
                 }
-                if (! in_array($advance->status?->slug, ['received', 'reporting'], true)) {
+                if (! $advance->statusEnum()->allowsExpenses()) {
                     throw new InvalidArgumentException('Траты к авансу — только после получения денег');
                 }
             }
@@ -102,7 +102,6 @@ class ExpenseService
             }
 
             if ($advance) {
-                $this->advances->markReportingIfNeeded($advance);
                 $this->advances->maybeAutoClose($advance);
             }
 
@@ -119,10 +118,10 @@ class ExpenseService
             }
 
             $advance = $expense->advance_id
-                ? Advance::whereKey($expense->advance_id)->lockForUpdate()->with('status')->first()
+                ? Advance::whereKey($expense->advance_id)->lockForUpdate()->first()
                 : null;
 
-            if ($advance?->status?->slug === 'closed') {
+            if ($advance?->statusEnum()->value === 'closed') {
                 throw new InvalidArgumentException('Нельзя менять трату закрытого аванса');
             }
 
@@ -197,8 +196,7 @@ class ExpenseService
             }
 
             if ($advance) {
-                $this->advances->markReportingIfNeeded($advance);
-                $this->advances->maybeAutoClose($advance->fresh('status'));
+                $this->advances->maybeAutoClose($advance->fresh());
             }
 
             return $expense->fresh(['receipts', 'article', 'supplier']);
@@ -227,13 +225,13 @@ class ExpenseService
     public function attachToAdvance(Advance $advance, Expense $expense, ?string $debitAccount = null): Expense
     {
         return DB::transaction(function () use ($advance, $expense, $debitAccount) {
-            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['status', 'user'])->firstOrFail();
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['user'])->firstOrFail();
             $expense = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
 
-            if ($advance->status?->slug === 'closed') {
+            if ($advance->statusEnum()->value === 'closed') {
                 throw new InvalidArgumentException('К закрытому авансу нельзя прикреплять');
             }
-            if (! in_array($advance->status?->slug, ['received', 'reporting'], true)) {
+            if (! $advance->statusEnum()->allowsExpenses()) {
                 throw new InvalidArgumentException('Сначала отметьте получение денег');
             }
             if ($expense->advance_id && (int) $expense->advance_id !== (int) $advance->id) {
@@ -260,7 +258,6 @@ class ExpenseService
             $expense->save();
             $this->postExpenseDebits($owner, $expense, $advance, (int) $expense->amount_minor, $targetAccount, $occurredAt);
 
-            $this->advances->markReportingIfNeeded($advance);
             $this->advances->maybeAutoClose($advance);
 
             return $expense->fresh(['receipts', 'article', 'supplier']);
@@ -270,10 +267,10 @@ class ExpenseService
     public function detachFromAdvance(Advance $advance, Expense $expense): Expense
     {
         return DB::transaction(function () use ($advance, $expense) {
-            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['status', 'user'])->firstOrFail();
+            $advance = Advance::whereKey($advance->id)->lockForUpdate()->with(['user'])->firstOrFail();
             $expense = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
 
-            if ($advance->status?->slug === 'closed') {
+            if ($advance->statusEnum()->value === 'closed') {
                 throw new InvalidArgumentException('От закрытого аванса открепить нельзя');
             }
             if ((int) $expense->advance_id !== (int) $advance->id) {
@@ -303,10 +300,10 @@ class ExpenseService
             }
 
             $advance = $expense->advance_id
-                ? Advance::whereKey($expense->advance_id)->lockForUpdate()->with('status')->first()
+                ? Advance::whereKey($expense->advance_id)->lockForUpdate()->first()
                 : null;
 
-            if ($advance?->status?->slug === 'closed') {
+            if ($advance?->statusEnum()->value === 'closed') {
                 throw new InvalidArgumentException('Нельзя удалить трату закрытого аванса');
             }
 

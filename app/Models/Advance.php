@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AdvanceStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,11 +12,12 @@ class Advance extends Model
 {
     protected $fillable = [
         'user_id',
-        'status_id',
+        'status',
         'disbursement_method_id',
         'title',
         'amount_minor',
         'note',
+        'needed_at',
         'issued_at',
         'closed_at',
         'is_demo',
@@ -24,6 +26,8 @@ class Advance extends Model
     protected function casts(): array
     {
         return [
+            'status' => AdvanceStatus::class,
+            'needed_at' => 'date',
             'issued_at' => 'datetime',
             'closed_at' => 'datetime',
             'is_demo' => 'boolean',
@@ -41,11 +45,6 @@ class Advance extends Model
             ->withTimestamps();
     }
 
-    public function status(): BelongsTo
-    {
-        return $this->belongsTo(AdvanceStatus::class, 'status_id');
-    }
-
     public function disbursementMethod(): BelongsTo
     {
         return $this->belongsTo(DisbursementMethod::class, 'disbursement_method_id');
@@ -59,5 +58,15 @@ class Advance extends Model
     public function walletTransactions(): HasMany
     {
         return $this->hasMany(WalletTransaction::class);
+    }
+
+    public function statusEnum(): AdvanceStatus
+    {
+        $status = $this->status;
+        if ($status instanceof AdvanceStatus) {
+            return $status;
+        }
+
+        return AdvanceStatus::fromSlug(is_string($status) ? $status : null);
     }
 }

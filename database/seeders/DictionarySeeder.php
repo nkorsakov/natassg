@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\AdvanceStatus;
 use App\Models\DisbursementMethod;
 use App\Models\EventType;
 use App\Models\ExpenseArticle;
@@ -63,24 +62,6 @@ class DictionarySeeder extends Seeder
         foreach ($eventTypes as $row) {
             EventType::updateOrCreate(['slug' => $row['slug']], $row);
         }
-
-        $advanceStatuses = [
-            ['slug' => 'pending', 'label' => 'Заявка', 'color' => '#FFAD4D', 'sort' => 10, 'is_system' => true],
-            ['slug' => 'received', 'label' => 'Деньги получены', 'color' => '#6957EE', 'sort' => 20, 'is_system' => true],
-            ['slug' => 'reporting', 'label' => 'На отчёте', 'color' => '#0D9488', 'sort' => 30, 'is_system' => true],
-            ['slug' => 'closed', 'label' => 'Закрыта', 'color' => '#626571', 'sort' => 40, 'is_system' => true],
-        ];
-        foreach ($advanceStatuses as $row) {
-            AdvanceStatus::updateOrCreate(['slug' => $row['slug']], $row);
-        }
-        if (! AdvanceStatus::query()->where('is_default', true)->exists()) {
-            $fallback = AdvanceStatus::query()->where('slug', 'pending')->first()
-                ?? AdvanceStatus::query()->orderBy('sort')->orderBy('id')->first();
-            if ($fallback) {
-                $fallback->update(['is_default' => true]);
-            }
-        }
-        AdvanceStatus::query()->whereIn('slug', ['approved', 'issued'])->delete();
 
         $articles = [
             ['slug' => 'transport', 'label' => 'Транспорт', 'color' => '#5B8DEF', 'sort' => 10, 'is_system' => true],

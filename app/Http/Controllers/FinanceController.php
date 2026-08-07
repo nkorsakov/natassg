@@ -74,15 +74,15 @@ class FinanceController extends Controller
             'task_ids' => ['nullable', 'array'],
             'task_ids.*' => ['integer', 'exists:tasks,id'],
             'amount' => ['nullable', 'numeric', 'min:0'],
-            'status_id' => ['nullable', 'string'],
             'disbursement_method_id' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
+            'needed_at' => ['nullable', 'date'],
         ]);
 
         try {
             $advance = $advances->create($request->user(), $data);
         } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['status_id' => $e->getMessage()]);
+            throw ValidationException::withMessages(['advance' => $e->getMessage()]);
         }
 
         return back()->with('created_advance_id', $advance->id);
@@ -98,15 +98,15 @@ class FinanceController extends Controller
             'task_ids' => ['nullable', 'array'],
             'task_ids.*' => ['integer', 'exists:tasks,id'],
             'amount' => ['nullable', 'numeric', 'min:0'],
-            'status_id' => ['nullable', 'string'],
             'disbursement_method_id' => ['nullable', 'string'],
             'note' => ['nullable', 'string'],
+            'needed_at' => ['nullable', 'date'],
         ]);
 
         try {
             $advances->update($advance, $data);
         } catch (InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['status_id' => $e->getMessage()]);
+            throw ValidationException::withMessages(['advance' => $e->getMessage()]);
         }
 
         return back();
@@ -118,6 +118,38 @@ class FinanceController extends Controller
 
         try {
             $advances->destroy($advance);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['advance' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function approveAdvance(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
+    {
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
+
+        try {
+            $advances->approve($advance);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['advance' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function receiveAdvance(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
+    {
+        abort_unless($request->user()?->canAccessOwned($advance->user_id), 403);
+
+        $data = $request->validate([
+            'amount' => ['nullable', 'numeric', 'gt:0'],
+            'disbursement_method_id' => ['nullable', 'string'],
+            'issued_at' => ['nullable', 'date'],
+        ]);
+
+        try {
+            $advances->receive($advance, $data);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['advance' => $e->getMessage()]);
         }
@@ -160,11 +192,6 @@ class FinanceController extends Controller
     public function closeToWallet(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
     {
         return $this->closeAction($request, $advance, fn () => $advances->closeToWallet($advance));
-    }
-
-    public function closeWriteOff(Request $request, Advance $advance, AdvanceService $advances): RedirectResponse
-    {
-        return $this->closeAction($request, $advance, fn () => $advances->closeWriteOff($advance));
     }
 
     public function attachExpense(Request $request, Advance $advance, Expense $expense, ExpenseService $expenses): RedirectResponse

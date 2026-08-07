@@ -222,7 +222,6 @@ class EntityCrudRoutesTest extends TestCase
         $advCreate = $this->actingAs($this->user)->post('/advances', [
             'title' => 'Аванс CRUD',
             'amount' => 1000,
-            'status_id' => 'pending',
             'disbursement_method_id' => $this->method->slug,
             'note' => 'n',
         ]);
@@ -233,11 +232,20 @@ class EntityCrudRoutesTest extends TestCase
         $this->actingAs($this->user)->put("/advances/{$advanceId}", [
             'title' => 'Аванс CRUD 2',
             'amount' => 1200,
-            'status_id' => 'received',
             'disbursement_method_id' => $this->method->slug,
             'note' => 'ok',
         ])->assertRedirect();
-        $this->assertSame('received', Advance::find($advanceId)?->fresh('status')->status?->slug);
+        $this->assertSame('pending', Advance::find($advanceId)?->fresh()->statusEnum()->value);
+
+        $this->actingAs($this->user)->post("/advances/{$advanceId}/approve")->assertRedirect();
+        $this->assertSame('approved', Advance::find($advanceId)?->fresh()->statusEnum()->value);
+
+        $this->actingAs($this->user)->post("/advances/{$advanceId}/receive", [
+            'amount' => 1200,
+            'disbursement_method_id' => $this->method->slug,
+            'issued_at' => '2026-08-02',
+        ])->assertRedirect();
+        $this->assertSame('reporting', Advance::find($advanceId)?->fresh()->statusEnum()->value);
 
         $this->actingAs($this->user)->post("/advances/{$advanceId}/expenses", [
             'amount' => 300,
@@ -293,22 +301,11 @@ class EntityCrudRoutesTest extends TestCase
         $this->assertDatabaseMissing('expenses', ['id' => $free->id]);
 
         $this->actingAs($this->user)->post("/advances/{$advanceId}/close-to-wallet")->assertRedirect();
-        $this->assertSame('closed', Advance::find($advanceId)?->fresh('status')->status?->slug);
-
-        $open = $this->actingAs($this->user)->post('/advances', [
-            'title' => 'Списание',
-            'amount' => 500,
-            'status_id' => 'received',
-            'disbursement_method_id' => $this->method->slug,
-        ]);
-        $openId = (int) session('created_advance_id');
-        $this->actingAs($this->user)->post("/advances/{$openId}/close-writeoff")->assertRedirect();
-        $this->assertSame('closed', Advance::find($openId)?->fresh('status')->status?->slug);
+        $this->assertSame('closed', Advance::find($advanceId)?->fresh()->statusEnum()->value);
 
         $toDelete = $this->actingAs($this->user)->post('/advances', [
             'title' => 'Удалить',
             'amount' => 100,
-            'status_id' => 'pending',
         ]);
         $delId = (int) session('created_advance_id');
         $this->actingAs($this->user)->delete("/advances/{$delId}")->assertRedirect();
@@ -357,7 +354,7 @@ class EntityCrudRoutesTest extends TestCase
     {
         $advance = Advance::create([
             'user_id' => $this->user->id,
-            'status_id' => \App\Models\AdvanceStatus::query()->where('slug', 'pending')->value('id'),
+            'status' => \App\Enums\AdvanceStatus::Pending,
             'title' => 'Pending',
             'amount_minor' => 10000,
         ]);

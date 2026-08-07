@@ -4,8 +4,9 @@ import { useDisplay } from 'vuetify';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useIsAdmin } from '@/composables/useIsAdmin';
 import { prepareUploadFile } from '@/utils/compressImage';
-import { dictDotStyle } from '@/utils/dictColor';
+import { dictChipStyle } from '@/utils/dictColor';
 import OwnerBadge from '@/Components/OwnerBadge.vue';
+import DateTimeFields from '@/Components/DateTimeFields.vue';
 
 const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
@@ -25,13 +26,14 @@ const previewReceipt = ref(null);
 const titleInput = ref(null);
 const skipWatch = ref(false);
 const savingCreate = ref(false);
+const showReceiveModal = ref(false);
 
 const isCreating = computed(() => props.creating || !props.advanceId);
 const advance = computed(() => (props.advanceId ? store.getAdvance(props.advanceId) : null));
-const showDialog = computed(() => !!advance.value || isCreating.value);const expenseList = computed(() =>
+const showDialog = computed(() => !!advance.value || isCreating.value);
+const expenseList = computed(() =>
     props.advanceId ? store.expensesForAdvance(props.advanceId) : [],
 );
-const statusItems = computed(() => store.dictionaries.value.advanceStatuses || []);
 const methodItems = computed(() => store.dictionaries.value.disbursementMethods || []);
 const articleItems = computed(() => store.dictionaries.value.expenseArticles || []);
 const taskItems = computed(() =>
@@ -52,10 +54,15 @@ const supplierItems = computed(() =>
 const form = reactive({
     title: '',
     amount: '',
-    status_id: store.defaultAdvanceStatusId(),
     task_ids: [],
-    disbursement_method_id: null,
     note: '',
+    needed_at: '',
+});
+
+const receiveForm = reactive({
+    amount: '',
+    issued_at: '',
+    disbursement_method_id: null,
 });
 
 const expenseDraft = reactive({
@@ -80,14 +87,31 @@ const isDraftTitle = (title) => {
     return !t || t === 'Новая заявка на аванс' || t === 'Заявка на аванс';
 };
 
+const statusId = computed(() =>
+    isCreating.value
+        ? 'pending'
+        : (advance.value?.status_id || 'pending'),
+);
+const statusMeta = computed(() => store.getAdvanceStatus(statusId.value));
+
 const spent = computed(() => store.advanceSpent(props.advanceId));
 const remaining = computed(() => store.advanceRemaining(props.advanceId));
-const canClose = computed(() =>
-    ['received', 'reporting'].includes(advance.value?.status_id) && remaining.value > 0,
-);
 
-const canEditMoney = computed(() =>
-    ['received', 'reporting'].includes(advance.value?.status_id),
+const canApprove = computed(() =>
+    !isCreating.value && advance.value?.status_id === 'pending',
+);
+const canReceive = computed(() =>
+    !isCreating.value && advance.value?.status_id === 'approved',
+);
+const canEditMoney = computed(() => advance.value?.status_id === 'reporting');
+const canClose = computed(() =>
+    advance.value?.status_id === 'reporting' && remaining.value > 0,
+);
+const showExpenses = computed(() =>
+    ['reporting', 'closed'].includes(advance.value?.status_id),
+);
+const showMoneyPanel = computed(() =>
+    ['reporting', 'closed'].includes(advance.value?.status_id),
 );
 
 const unassignedExpenses = computed(() =>
@@ -102,19 +126,26 @@ const accountLabel = (account) => ({
     unassigned: 'не разнесено',
 }[account] || account);
 
+const formatIssued = (value) => {
+    const raw = String(value || '');
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+    return raw || '—';
+};
+
 watch(
     () => [model.value, props.advanceId, props.creating],
     async () => {
         if (!model.value) return;
         skipWatch.value = true;
+        showReceiveModal.value = false;
         if (isCreating.value) {
             const prefill = props.createPrefill || {};
             form.title = prefill.title || '';
             form.amount = prefill.amount != null && Number(prefill.amount) ? prefill.amount : '';
-            form.status_id = prefill.status_id || store.defaultAdvanceStatusId();
             form.task_ids = [...(prefill.task_ids || (prefill.task_id ? [prefill.task_id] : []))];
-            form.disbursement_method_id = prefill.disbursement_method_id || null;
             form.note = prefill.note || '';
+            form.needed_at = prefill.needed_at || todayIsoDate();
             expenseDraft.amount = '';
             expenseDraft.description = '';
             expenseDraft.article_id = articleItems.value[0]?.id || null;
@@ -135,10 +166,9 @@ watch(
         const draftAmount = !Number(advance.value.amount);
         form.title = draftTitle ? '' : advance.value.title;
         form.amount = draftAmount ? '' : advance.value.amount;
-        form.status_id = advance.value.status_id;
         form.task_ids = [...(advance.value.task_ids || [])];
-        form.disbursement_method_id = advance.value.disbursement_method_id || null;
         form.note = advance.value.note || '';
+        form.needed_at = advance.value.needed_at || advance.value.created_at || todayIsoDate();
         expenseDraft.amount = '';
         expenseDraft.description = '';
         expenseDraft.article_id = articleItems.value[0]?.id || null;
@@ -160,26 +190,9 @@ watch(
     () => {
         if (skipWatch.value || !model.value || isCreating.value || !props.advanceId) return;
 
-        if (form.status_id === 'received') {
-            if (!(Number(form.amount) > 0)) {
-                window.alert('Перед получением укажите сумму больше нуля.');
-                skipWatch.value = true;
-                form.status_id = advance.value?.status_id || store.defaultAdvanceStatusId();
-                nextTick(() => { skipWatch.value = false; });
-                return;
-            }
-            if (!form.disbursement_method_id) {
-                window.alert('Укажите способ выдачи (перевод / наличка).');
-                skipWatch.value = true;
-                form.status_id = advance.value?.status_id || store.defaultAdvanceStatusId();
-                nextTick(() => { skipWatch.value = false; });
-                return;
-            }
-        }
-
         if (
             advance.value
-            && ['received', 'reporting', 'closed'].includes(advance.value.status_id)
+            && ['reporting', 'closed'].includes(advance.value.status_id)
             && Number(form.amount) !== Number(advance.value.amount)
             && Number(form.amount) > 0
         ) {
@@ -191,55 +204,56 @@ watch(
             }
         }
 
-        if (advance.value?.status_id === 'closed' && form.status_id !== 'closed') {
-            window.alert('Закрытый аванс нельзя открыть снова из статуса. Создайте новую заявку.');
-            skipWatch.value = true;
-            form.status_id = 'closed';
-            nextTick(() => { skipWatch.value = false; });
-            return;
-        }
-
-        if (form.status_id === 'closed' && advance.value?.status_id !== 'closed') {
-            window.alert('Закрывайте через «в кошелёк» или «списание без отчёта».');
-            skipWatch.value = true;
-            form.status_id = advance.value?.status_id || store.defaultAdvanceStatusId();
-            nextTick(() => { skipWatch.value = false; });
-            return;
-        }
-
         store.updateAdvance(props.advanceId, {
             title: form.title.trim(),
             amount: Number(form.amount) || 0,
-            status_id: form.status_id,
             task_ids: form.task_ids,
-            disbursement_method_id: form.disbursement_method_id,
             note: form.note,
+            needed_at: form.needed_at || null,
         });
     },
     { deep: true },
 );
 
+const openReceiveModal = () => {
+    receiveForm.amount = form.amount;
+    receiveForm.issued_at = todayIsoDate();
+    receiveForm.disbursement_method_id = advance.value?.disbursement_method_id || null;
+    showReceiveModal.value = true;
+};
+
+const markReceived = () => {
+    if (!props.advanceId) return;
+    if (!(Number(receiveForm.amount) > 0)) {
+        window.alert('Перед получением укажите сумму больше нуля.');
+        return;
+    }
+    if (!receiveForm.disbursement_method_id) {
+        window.alert('Укажите способ выдачи (перевод / наличка).');
+        return;
+    }
+    if (!receiveForm.issued_at) {
+        window.alert('Укажите дату получения.');
+        return;
+    }
+    store.receiveAdvance(props.advanceId, {
+        amount: Number(receiveForm.amount) || 0,
+        disbursement_method_id: receiveForm.disbursement_method_id,
+        issued_at: receiveForm.issued_at,
+    });
+    showReceiveModal.value = false;
+};
+
 const saveCreate = async () => {
     if (savingCreate.value) return;
-    if (form.status_id === 'received') {
-        if (!(Number(form.amount) > 0)) {
-            window.alert('Перед получением укажите сумму больше нуля.');
-            return;
-        }
-        if (!form.disbursement_method_id) {
-            window.alert('Укажите способ выдачи (перевод / наличка).');
-            return;
-        }
-    }
     savingCreate.value = true;
     try {
         const adv = await store.createAdvance({
             title: form.title.trim(),
             amount: Number(form.amount) || 0,
-            status_id: form.status_id || store.defaultAdvanceStatusId(),
             task_ids: form.task_ids,
-            disbursement_method_id: form.disbursement_method_id,
             note: form.note,
+            needed_at: form.needed_at || null,
         });
         if (adv?.id) {
             emit('created', adv.id);
@@ -398,18 +412,47 @@ const openFirstTask = () => {
         scrollable
     >
         <v-card v-if="showDialog" class="d-flex flex-column" :style="mdAndUp ? 'max-height:90vh' : 'min-height:100%'">
-            <v-card-title class="d-flex align-center justify-space-between px-6 pt-5">
-                <div>
+            <v-card-title class="d-flex align-center justify-space-between px-6 pt-5 ga-3">
+                <div class="min-w-0">
                     <div class="text-caption text-medium-emphasis mb-1 d-flex align-center ga-2">
                         Аванс
                         <OwnerBadge :show="isAdmin && !isCreating" :user="advance?.user" />
                         <span v-if="isAdmin && !isCreating && advance?.user?.name">{{ advance.user.name }}</span>
                     </div>
-                    <span class="text-h6 font-weight-bold">{{ isCreating ? 'Новая заявка' : 'Заявка' }}</span>
+                    <div class="d-flex align-center ga-2 flex-wrap">
+                        <span class="text-h6 font-weight-bold">{{ isCreating ? 'Новая заявка' : 'Заявка' }}</span>
+                        <v-chip
+                            size="small"
+                            variant="flat"
+                            :style="dictChipStyle(statusMeta?.color)"
+                        >
+                            {{ statusMeta?.label || statusId }}
+                        </v-chip>
+                    </div>
                 </div>
-                <v-btn icon variant="tonal" size="small" @click="closeDialog">
-                    <v-icon>mdi-close</v-icon>
-                </v-btn>
+                <div class="d-flex align-center ga-2 flex-shrink-0">
+                    <v-btn
+                        v-if="canApprove"
+                        color="primary"
+                        size="small"
+                        prepend-icon="mdi-check-decagram"
+                        @click="store.approveAdvance(advanceId)"
+                    >
+                        Утвердили
+                    </v-btn>
+                    <v-btn
+                        v-else-if="canReceive"
+                        color="primary"
+                        size="small"
+                        prepend-icon="mdi-cash-check"
+                        @click="openReceiveModal"
+                    >
+                        Получены
+                    </v-btn>
+                    <v-btn icon variant="tonal" size="small" @click="closeDialog">
+                        <v-icon>mdi-close</v-icon>
+                    </v-btn>
+                </div>
             </v-card-title>
             <v-divider />
             <v-card-text class="px-6 py-5">
@@ -433,37 +476,14 @@ const openFirstTask = () => {
                         />
                     </v-col>
                     <v-col cols="12" sm="6">
-                        <v-select
-                            v-model="form.status_id"
-                            :items="statusItems"
-                            item-title="label"
-                            item-value="id"
-                            label="Статус"
-                            hide-details
-                        >
-                            <template #selection>
-                                <span class="d-inline-flex align-center ga-2">
-                                    <span
-                                        style="width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0"
-                                        :style="dictDotStyle(store.getAdvanceStatus(form.status_id)?.color)"
-                                    />
-                                    <span>{{ store.getAdvanceStatus(form.status_id)?.label }}</span>
-                                </span>
-                            </template>
-                        </v-select>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                        <v-select
-                            v-model="form.disbursement_method_id"
-                            :items="methodItems"
-                            item-title="label"
-                            item-value="id"
-                            label="Способ выдачи"
-                            clearable
+                        <DateTimeFields
+                            v-model="form.needed_at"
+                            date-label="Нужна к"
+                            all-day
                             hide-details
                         />
                     </v-col>
-                    <v-col cols="12" sm="6">
+                    <v-col cols="12">
                         <v-select
                             v-model="form.task_ids"
                             :items="taskItems"
@@ -477,253 +497,263 @@ const openFirstTask = () => {
                         />
                     </v-col>
                 </v-row>
-                <v-textarea v-model="form.note" label="Комментарий" rows="2" hide-details class="mb-3" />
+                <v-textarea
+                    v-model="form.note"
+                    label="Комментарий"
+                    rows="2"
+                    hide-details
+                    class="mt-4 mb-3"
+                />
 
                 <template v-if="!isCreating">
-                <div class="skydesk-accent-panel pa-4 mb-4">
-                    <div class="d-flex justify-space-between text-body-2 mb-1">
-                        <span>Потрачено</span>
-                        <b>{{ store.formatMoney(spent) }}</b>
-                    </div>
-                    <div class="d-flex justify-space-between text-body-2">
-                        <span>Остаток</span>
-                        <b :class="remaining < 0 ? 'text-error' : ''">{{ store.formatMoney(remaining) }}</b>
-                    </div>
-                </div>
-
-                <div class="d-flex flex-wrap ga-2 mb-4">
-                    <v-btn
-                        size="small"
-                        variant="tonal"
-                        color="success"
-                        :disabled="!canClose"
-                        @click="store.closeAdvanceToWallet(advanceId)"
-                    >
-                        Остаток → кошелёк
-                    </v-btn>
-                    <v-btn
-                        size="small"
-                        variant="tonal"
-                        color="warning"
-                        :disabled="!canClose"
-                        @click="store.closeAdvanceWriteOff(advanceId)"
-                    >
-                        Списание без отчёта
-                    </v-btn>
-                </div>
-
-                <div class="d-flex align-center justify-space-between mb-2">
-                    <h3 class="text-subtitle-2 font-weight-bold mb-0">Траты</h3>
-                </div>
-                <div
-                    v-for="x in expenseList"
-                    :key="x.id"
-                    class="px-3 py-3 mb-2"
-                    style="border-radius:11px;border:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
-                >
-                    <div class="d-flex justify-space-between align-start">
-                        <div>
-                            <div class="text-body-2 font-weight-bold">{{ x.description || 'Трата' }}</div>
-                            <div class="text-caption text-medium-emphasis">
-                                {{ store.getExpenseArticle(x.article_id)?.label || '—' }}
-                                ·
-                                {{ store.getSupplier(x.supplier_id)?.name || '—' }}
-                                · {{ accountLabel(x.debit_account) }}
+                    <template v-if="showMoneyPanel">
+                        <div class="skydesk-accent-panel pa-4 mb-4">
+                            <div v-if="advance?.issued_at" class="text-caption text-medium-emphasis mb-2">
+                                Получено {{ formatIssued(advance.issued_at) }}
                             </div>
-                        </div>
-                        <div class="text-right">
-                            <b>{{ store.formatMoney(x.amount) }}</b>
-                            <div class="d-flex justify-end ga-1">
-                                <v-btn
-                                    v-if="!isClosed"
-                                    size="x-small"
-                                    variant="text"
-                                    @click="detachExpense(x)"
-                                >
-                                    Открепить
-                                </v-btn>
-                                <v-btn
-                                    v-if="!isClosed"
-                                    size="x-small"
-                                    variant="text"
-                                    color="error"
-                                    @click="store.removeExpense(x.id)"
-                                >
-                                    Удалить
-                                </v-btn>
+                            <div class="d-flex justify-space-between text-body-2 mb-1">
+                                <span>Потрачено</span>
+                                <b>{{ store.formatMoney(spent) }}</b>
                             </div>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <div
-                            v-if="receiptsFor(x.id).length || (uploadingReceipt && receiptExpenseId === x.id)"
-                            class="d-flex flex-wrap ga-2 mb-2"
-                        >
-                            <div
-                                v-for="r in receiptsFor(x.id).filter(isImageReceipt)"
-                                :key="r.id"
-                                class="skydesk-att-item"
-                            >
-                                <button
-                                    type="button"
-                                    class="skydesk-att-thumb-btn"
-                                    aria-label="Открыть чек"
-                                    @click="openReceipt(r)"
-                                >
-                                    <img
-                                        :src="r.url"
-                                        alt=""
-                                        class="skydesk-att-thumb"
-                                        loading="lazy"
-                                    >
-                                </button>
-                                <v-btn
-                                    class="skydesk-att-remove"
-                                    icon
-                                    size="x-small"
-                                    variant="flat"
-                                    aria-label="Удалить"
-                                    @click="removeReceipt(x.id, r.id)"
-                                >
-                                    <v-icon size="14">mdi-close</v-icon>
-                                </v-btn>
+                            <div class="d-flex justify-space-between text-body-2">
+                                <span>Остаток</span>
+                                <b :class="remaining < 0 ? 'text-error' : ''">{{ store.formatMoney(remaining) }}</b>
                             </div>
                         </div>
 
-                        <div
-                            v-for="r in receiptsFor(x.id).filter((item) => !isImageReceipt(item))"
-                            :key="`file-${r.id}`"
-                            class="d-flex align-center ga-2 px-3 py-2 mb-1 skydesk-accent-panel"
-                        >
-                            <v-icon size="16">mdi-file-outline</v-icon>
-                            <button
-                                type="button"
-                                class="flex-grow-1 text-start text-body-2 skydesk-att-name"
-                                @click="openReceipt(r)"
-                            >
-                                {{ r.name || r.original_name || 'Файл' }}
-                            </button>
-                            <v-btn icon size="x-small" variant="text" @click="removeReceipt(x.id, r.id)">
-                                <v-icon size="16">mdi-delete-outline</v-icon>
-                            </v-btn>
-                        </div>
-
-                        <div class="d-flex align-center ga-2 flex-wrap">
+                        <div class="d-flex flex-wrap ga-2 mb-4">
                             <v-btn
-                                size="x-small"
+                                size="small"
                                 variant="tonal"
-                                prepend-icon="mdi-camera"
-                                :loading="uploadingReceipt && receiptExpenseId === x.id"
-                                @click="addReceipt(x.id)"
+                                color="success"
+                                :disabled="!canClose"
+                                @click="store.closeAdvanceToWallet(advanceId)"
                             >
-                                Чек / фото
+                                Остаток → кошелёк
                             </v-btn>
-                            <div
-                                v-if="uploadingReceipt && receiptExpenseId === x.id"
-                                class="text-caption text-medium-emphasis"
-                            >
-                                Загрузка…
+                        </div>
+                    </template>
+
+                    <template v-if="showExpenses">
+                        <div class="d-flex align-center justify-space-between mb-2">
+                            <h3 class="text-subtitle-2 font-weight-bold mb-0">Траты</h3>
+                        </div>
+                        <div
+                            v-for="x in expenseList"
+                            :key="x.id"
+                            class="px-3 py-3 mb-2"
+                            style="border-radius:11px;border:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                        >
+                            <div class="d-flex justify-space-between align-start">
+                                <div>
+                                    <div class="text-body-2 font-weight-bold">{{ x.description || 'Трата' }}</div>
+                                    <div class="text-caption text-medium-emphasis">
+                                        {{ store.getExpenseArticle(x.article_id)?.label || '—' }}
+                                        ·
+                                        {{ store.getSupplier(x.supplier_id)?.name || '—' }}
+                                        · {{ accountLabel(x.debit_account) }}
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <b>{{ store.formatMoney(x.amount) }}</b>
+                                    <div class="d-flex justify-end ga-1">
+                                        <v-btn
+                                            v-if="!isClosed"
+                                            size="x-small"
+                                            variant="text"
+                                            @click="detachExpense(x)"
+                                        >
+                                            Открепить
+                                        </v-btn>
+                                        <v-btn
+                                            v-if="!isClosed"
+                                            size="x-small"
+                                            variant="text"
+                                            color="error"
+                                            @click="store.removeExpense(x.id)"
+                                        >
+                                            Удалить
+                                        </v-btn>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div
+                                    v-if="receiptsFor(x.id).length || (uploadingReceipt && receiptExpenseId === x.id)"
+                                    class="d-flex flex-wrap ga-2 mb-2"
+                                >
+                                    <div
+                                        v-for="r in receiptsFor(x.id).filter(isImageReceipt)"
+                                        :key="r.id"
+                                        class="skydesk-att-item"
+                                    >
+                                        <button
+                                            type="button"
+                                            class="skydesk-att-thumb-btn"
+                                            aria-label="Открыть чек"
+                                            @click="openReceipt(r)"
+                                        >
+                                            <img
+                                                :src="r.url"
+                                                alt=""
+                                                class="skydesk-att-thumb"
+                                                loading="lazy"
+                                            >
+                                        </button>
+                                        <v-btn
+                                            class="skydesk-att-remove"
+                                            icon
+                                            size="x-small"
+                                            variant="flat"
+                                            aria-label="Удалить"
+                                            @click="removeReceipt(x.id, r.id)"
+                                        >
+                                            <v-icon size="14">mdi-close</v-icon>
+                                        </v-btn>
+                                    </div>
+                                </div>
+
+                                <div
+                                    v-for="r in receiptsFor(x.id).filter((item) => !isImageReceipt(item))"
+                                    :key="`file-${r.id}`"
+                                    class="d-flex align-center ga-2 px-3 py-2 mb-1 skydesk-accent-panel"
+                                >
+                                    <v-icon size="16">mdi-file-outline</v-icon>
+                                    <button
+                                        type="button"
+                                        class="flex-grow-1 text-start text-body-2 skydesk-att-name"
+                                        @click="openReceipt(r)"
+                                    >
+                                        {{ r.name || r.original_name || 'Файл' }}
+                                    </button>
+                                    <v-btn icon size="x-small" variant="text" @click="removeReceipt(x.id, r.id)">
+                                        <v-icon size="16">mdi-delete-outline</v-icon>
+                                    </v-btn>
+                                </div>
+
+                                <div class="d-flex align-center ga-2 flex-wrap">
+                                    <v-btn
+                                        size="x-small"
+                                        variant="tonal"
+                                        prepend-icon="mdi-camera"
+                                        :loading="uploadingReceipt && receiptExpenseId === x.id"
+                                        @click="addReceipt(x.id)"
+                                    >
+                                        Чек / фото
+                                    </v-btn>
+                                    <div
+                                        v-if="uploadingReceipt && receiptExpenseId === x.id"
+                                        class="text-caption text-medium-emphasis"
+                                    >
+                                        Загрузка…
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <v-card v-if="canEditMoney" variant="outlined" class="pa-4 mt-2">
-                    <div class="text-caption font-weight-bold mb-2">Новая трата</div>
-                    <v-row dense>
-                        <v-col cols="12" sm="4">
-                            <v-text-field v-model="expenseDraft.amount" type="number" label="Сумма" density="compact" hide-details />
-                        </v-col>
-                        <v-col cols="12" sm="4">
-                            <v-text-field v-model="expenseDraft.occurred_at" type="date" label="Дата" density="compact" hide-details />
-                        </v-col>
-                        <v-col cols="12" sm="4">
-                            <v-select
-                                v-model="expenseDraft.article_id"
-                                :items="articleItems"
-                                item-title="label"
-                                item-value="id"
-                                label="Статья"
-                                density="compact"
-                                hide-details
+                        <v-card v-if="canEditMoney" variant="outlined" class="pa-4 mt-2">
+                            <div class="text-caption font-weight-bold mb-2">Новая трата</div>
+                            <v-row dense>
+                                <v-col cols="12" sm="4">
+                                    <v-text-field v-model="expenseDraft.amount" type="number" label="Сумма" density="compact" hide-details />
+                                </v-col>
+                                <v-col cols="12" sm="4">
+                                    <DateTimeFields
+                                        v-model="expenseDraft.occurred_at"
+                                        date-label="Дата"
+                                        all-day
+                                        density="compact"
+                                        hide-details
+                                    />
+                                </v-col>
+                                <v-col cols="12" sm="4">
+                                    <v-select
+                                        v-model="expenseDraft.article_id"
+                                        :items="articleItems"
+                                        item-title="label"
+                                        item-value="id"
+                                        label="Статья"
+                                        density="compact"
+                                        hide-details
+                                    />
+                                </v-col>
+                                <v-col cols="12" sm="6">
+                                    <v-select
+                                        v-model="expenseDraft.supplier_id"
+                                        :items="supplierItems"
+                                        item-title="title"
+                                        item-value="id"
+                                        label="Поставщик"
+                                        density="compact"
+                                        hide-details
+                                        clearable
+                                    />
+                                </v-col>
+                                <v-col cols="12" sm="6">
+                                    <v-text-field v-model="expenseDraft.description" label="Описание" density="compact" hide-details />
+                                </v-col>
+                            </v-row>
+                            <div class="d-flex flex-wrap align-center ga-2 mt-3">
+                                <v-btn
+                                    size="small"
+                                    variant="tonal"
+                                    prepend-icon="mdi-paperclip"
+                                    :loading="uploadingDraftReceipt"
+                                    @click="draftReceiptInput?.click()"
+                                >
+                                    Файл / фото
+                                </v-btn>
+                                <v-chip
+                                    v-for="(f, idx) in expenseDraft.receipts"
+                                    :key="`${f.name}-${idx}`"
+                                    size="small"
+                                    closable
+                                    @click:close="removeDraftReceipt(idx)"
+                                >
+                                    {{ f.name || 'файл' }}
+                                </v-chip>
+                            </div>
+                            <v-btn class="mt-3" color="primary" size="small" @click="addExpense">Добавить трату</v-btn>
+                            <input
+                                ref="draftReceiptInput"
+                                type="file"
+                                class="d-none"
+                                multiple
+                                accept="image/*,.pdf"
+                                @change="onDraftReceiptsSelected"
                             />
-                        </v-col>
-                        <v-col cols="12" sm="6">
-                            <v-select
-                                v-model="expenseDraft.supplier_id"
-                                :items="supplierItems"
-                                item-title="title"
-                                item-value="id"
-                                label="Поставщик"
-                                density="compact"
-                                hide-details
-                                clearable
-                            />
-                        </v-col>
-                        <v-col cols="12" sm="6">
-                            <v-text-field v-model="expenseDraft.description" label="Описание" density="compact" hide-details />
-                        </v-col>
-                    </v-row>
-                    <div class="d-flex flex-wrap align-center ga-2 mt-3">
-                        <v-btn
-                            size="small"
-                            variant="tonal"
-                            prepend-icon="mdi-paperclip"
-                            :loading="uploadingDraftReceipt"
-                            @click="draftReceiptInput?.click()"
-                        >
-                            Файл / фото
-                        </v-btn>
-                        <v-chip
-                            v-for="(f, idx) in expenseDraft.receipts"
-                            :key="`${f.name}-${idx}`"
-                            size="small"
-                            closable
-                            @click:close="removeDraftReceipt(idx)"
-                        >
-                            {{ f.name || 'файл' }}
-                        </v-chip>
-                    </div>
-                    <v-btn class="mt-3" color="primary" size="small" @click="addExpense">Добавить трату</v-btn>
-                    <input
-                        ref="draftReceiptInput"
-                        type="file"
-                        class="d-none"
-                        multiple
-                        accept="image/*,.pdf"
-                        @change="onDraftReceiptsSelected"
-                    />
-                </v-card>
+                        </v-card>
 
-                <v-card
-                    v-if="canEditMoney && unassignedExpenses.length"
-                    variant="outlined"
-                    class="pa-4 mt-3"
-                >
-                    <div class="text-caption font-weight-bold mb-2">Прикрепить неразнесённую</div>
-                    <div
-                        v-for="x in unassignedExpenses"
-                        :key="`u-${x.id}`"
-                        class="d-flex justify-space-between align-center py-2"
-                        style="border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                        <v-card
+                            v-if="canEditMoney && unassignedExpenses.length"
+                            variant="outlined"
+                            class="pa-4 mt-3"
+                        >
+                            <div class="text-caption font-weight-bold mb-2">Прикрепить неразнесённую</div>
+                            <div
+                                v-for="x in unassignedExpenses"
+                                :key="`u-${x.id}`"
+                                class="d-flex justify-space-between align-center py-2"
+                                style="border-bottom:1px solid rgba(var(--v-border-color),var(--v-border-opacity))"
+                            >
+                                <div class="min-w-0 pe-2">
+                                    <div class="text-body-2 font-weight-bold text-truncate">{{ x.description || 'Трата' }}</div>
+                                    <div class="text-caption text-medium-emphasis">{{ store.formatMoney(x.amount) }}</div>
+                                </div>
+                                <v-btn size="x-small" variant="tonal" @click="attachExisting(x)">Прикрепить</v-btn>
+                            </div>
+                        </v-card>
+                    </template>
+
+                    <v-btn
+                        v-if="form.task_ids?.length"
+                        class="mt-4"
+                        variant="text"
+                        color="primary"
+                        @click="openFirstTask"
                     >
-                        <div class="min-w-0 pe-2">
-                            <div class="text-body-2 font-weight-bold text-truncate">{{ x.description || 'Трата' }}</div>
-                            <div class="text-caption text-medium-emphasis">{{ store.formatMoney(x.amount) }}</div>
-                        </div>
-                        <v-btn size="x-small" variant="tonal" @click="attachExisting(x)">Прикрепить</v-btn>
-                    </div>
-                </v-card>
-
-                <v-btn
-                    v-if="form.task_ids?.length"
-                    class="mt-4"
-                    variant="text"
-                    color="primary"
-                    @click="openFirstTask"
-                >
-                    Открыть поручение →
-                </v-btn>
+                        Открыть поручение →
+                    </v-btn>
                 </template>
 
                 <div class="d-flex justify-space-between align-center ga-2 mt-4">
@@ -761,6 +791,49 @@ const openFirstTask = () => {
             accept="image/*,.pdf"
             @change="onReceiptSelected"
         />
+    </v-dialog>
+
+    <v-dialog
+        v-model="showReceiveModal"
+        max-width="420"
+    >
+        <v-card class="pa-4">
+            <div class="text-subtitle-1 font-weight-bold mb-3">Получение денег</div>
+            <v-text-field
+                v-model="receiveForm.amount"
+                type="number"
+                label="Сумма, ₽"
+                min="0"
+                hide-details
+                class="mb-3"
+            />
+            <DateTimeFields
+                v-model="receiveForm.issued_at"
+                date-label="Дата получения"
+                all-day
+                hide-details
+                class="mb-3"
+            />
+            <v-select
+                v-model="receiveForm.disbursement_method_id"
+                :items="methodItems"
+                item-title="label"
+                item-value="id"
+                label="Способ выдачи"
+                hide-details
+                class="mb-4"
+            />
+            <div class="d-flex justify-end ga-2">
+                <v-btn variant="text" @click="showReceiveModal = false">Отмена</v-btn>
+                <v-btn
+                    color="primary"
+                    :disabled="!(Number(receiveForm.amount) > 0) || !receiveForm.disbursement_method_id || !receiveForm.issued_at"
+                    @click="markReceived"
+                >
+                    Подтвердить
+                </v-btn>
+            </div>
+        </v-card>
     </v-dialog>
 
     <v-dialog

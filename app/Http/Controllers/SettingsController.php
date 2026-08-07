@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AdvanceStatus;
 use App\Models\Contact;
 use App\Models\DisbursementMethod;
 use App\Models\EventType;
@@ -28,7 +27,6 @@ class SettingsController extends Controller
         'priorities' => TaskPriority::class,
         'taskTypes' => TaskType::class,
         'eventTypes' => EventType::class,
-        'advanceStatuses' => AdvanceStatus::class,
         'expenseArticles' => ExpenseArticle::class,
         'disbursementMethods' => DisbursementMethod::class,
     ];
@@ -256,7 +254,7 @@ class SettingsController extends Controller
 
     protected function dictSupportsDefault(string $key): bool
     {
-        return in_array($key, ['statuses', 'advanceStatuses'], true);
+        return in_array($key, ['statuses'], true);
     }
 
     protected function dictUsageCount(string $key, mixed $item): int
@@ -268,7 +266,6 @@ class SettingsController extends Controller
             'priorities' => \App\Models\Task::query()->where('priority_id', $id)->count(),
             'taskTypes' => \App\Models\Task::query()->where('type_id', $id)->count(),
             'eventTypes' => \App\Models\CalendarEvent::query()->where('event_type_id', $id)->count(),
-            'advanceStatuses' => \App\Models\Advance::query()->where('status_id', $id)->count(),
             'expenseArticles' => \App\Models\Expense::query()->where('article_id', $id)->count(),
             'disbursementMethods' => \App\Models\Advance::query()->where('disbursement_method_id', $id)->count(),
             default => 0,

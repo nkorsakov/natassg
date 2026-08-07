@@ -57,7 +57,7 @@ class SkyDeskPresenter
             'priorities' => $map(\App\Models\TaskPriority::orderBy('sort')->get()),
             'taskTypes' => $map(\App\Models\TaskType::orderBy('sort')->get()),
             'eventTypes' => $map(\App\Models\EventType::orderBy('sort')->get()),
-            'advanceStatuses' => $map(\App\Models\AdvanceStatus::orderBy('sort')->get()),
+            'advanceStatuses' => \App\Enums\AdvanceStatus::dictionary(),
             'expenseArticles' => $map(\App\Models\ExpenseArticle::orderBy('sort')->get()),
             'disbursementMethods' => $map(\App\Models\DisbursementMethod::orderBy('sort')->get()),
         ];
@@ -89,7 +89,6 @@ class SkyDeskPresenter
         $advanceQuery = Advance::query()
             ->with([
                 'user',
-                'status',
                 'disbursementMethod',
                 'tasks',
                 'expenses.receipts',
@@ -263,18 +262,26 @@ class SkyDeskPresenter
 
     public static function advance(Advance $advance): array
     {
-        $advance->loadMissing(['user', 'status', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
+        $advance->loadMissing(['user', 'disbursementMethod', 'tasks', 'expenses.receipts', 'expenses.article', 'expenses.supplier']);
         $remainingMinor = (int) WalletTransaction::query()
             ->where('advance_id', $advance->id)
             ->where('account', WalletTransaction::ACCOUNT_ADVANCE)
             ->sum('amount_minor');
-        $spentMinor = max(0, (int) $advance->amount_minor - max(0, $remainingMinor));
-        if (in_array($advance->status?->slug, ['received', 'reporting', 'closed'], true)) {
-            $spentOnAdvance = (int) $advance->expenses
+
+        $status = $advance->statusEnum();
+        $isFunded = $status->isFunded();
+
+        // Pending/approved have no ledger credit yet — do not treat empty balance as "fully spent".
+        if (! $isFunded) {
+            $spentMinor = 0;
+            $remainingMinor = 0;
+        } else {
+            $spentMinor = (int) $advance->expenses
                 ->where('debit_account', WalletTransaction::ACCOUNT_ADVANCE)
                 ->sum('amount_minor');
-            $spentMinor = $spentOnAdvance;
+            $remainingMinor = max(0, $remainingMinor);
         }
+
         $amount = DictionaryResolver::minorToRubles((int) $advance->amount_minor);
 
         return [
@@ -287,13 +294,14 @@ class SkyDeskPresenter
             'amount' => $amount,
             'amount_minor' => $advance->amount_minor,
             'note' => $advance->note ?? '',
-            'status_id' => $advance->status?->slug,
+            'status_id' => $status->value,
             'disbursement_method_id' => $advance->disbursementMethod?->slug,
             'expense_ids' => $advance->expenses->pluck('id')->values(),
             'spent' => DictionaryResolver::minorToRubles($spentMinor),
-            'remaining' => DictionaryResolver::minorToRubles(max(0, $remainingMinor)),
-            'remaining_minor' => max(0, $remainingMinor),
+            'remaining' => DictionaryResolver::minorToRubles($remainingMinor),
+            'remaining_minor' => $remainingMinor,
             'expenses' => $advance->expenses->map(fn ($e) => self::expense($e))->values(),
+            'needed_at' => optional($advance->needed_at)?->toDateString(),
             'issued_at' => optional($advance->issued_at)?->toDateString(),
             'closed_at' => optional($advance->closed_at)?->toDateString(),
             'created_at' => optional($advance->created_at)?->toDateString(),
@@ -379,8 +387,10 @@ class SkyDeskPresenter
         $inAdvancesMinor = 0;
         if ($advances) {
             foreach ($advances as $a) {
-                $status = is_array($a) ? ($a['status_id'] ?? null) : $a->status?->slug;
-                if (! in_array($status, ['received', 'reporting'], true)) {
+                $status = is_array($a)
+                    ? ($a['status_id'] ?? null)
+                    : $a->statusEnum()->value;
+                if ($status !== \App\Enums\AdvanceStatus::Reporting->value) {
                     continue;
                 }
                 $remaining = is_array($a)

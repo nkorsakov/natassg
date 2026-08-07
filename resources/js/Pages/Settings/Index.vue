@@ -54,7 +54,6 @@ const dictTabs = [
     { value: 'priorities', label: 'Приоритеты', dictKey: 'priorities' },
     { value: 'taskTypes', label: 'Типы поручений', dictKey: 'taskTypes', withIcon: true },
     { value: 'eventTypes', label: 'Типы событий', dictKey: 'eventTypes' },
-    { value: 'advanceStatuses', label: 'Статусы авансов', dictKey: 'advanceStatuses', withDefault: true },
     { value: 'expenseArticles', label: 'Статьи расходов', dictKey: 'expenseArticles' },
     { value: 'disbursementMethods', label: 'Способы выдачи', dictKey: 'disbursementMethods' },
     { value: 'suppliers', label: 'Поставщики' },

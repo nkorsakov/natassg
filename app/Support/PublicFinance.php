@@ -50,7 +50,7 @@ class PublicFinance
     public static function payload(User $user): array
     {
         $advances = Advance::query()
-            ->with(['status', 'disbursementMethod'])
+            ->with(['disbursementMethod'])
             ->where('user_id', $user->id)
             ->orderByDesc('id')
             ->get();
@@ -67,17 +67,18 @@ class PublicFinance
         }
 
         $openAdvances = $advances
-            ->filter(fn (Advance $a) => in_array($a->status?->slug, ['pending', 'received', 'reporting'], true))
+            ->filter(fn (Advance $a) => in_array($a->statusEnum()->value, ['pending', 'approved', 'reporting'], true))
             ->values()
             ->map(function (Advance $a) {
                 $presented = SkyDeskPresenter::advance($a);
+                $status = $a->statusEnum();
 
                 return [
                     'id' => $a->id,
                     'title' => $a->title,
-                    'status_id' => $a->status?->slug,
-                    'status_label' => $a->status?->label,
-                    'status_color' => $a->status?->color,
+                    'status_id' => $status->value,
+                    'status_label' => $status->label(),
+                    'status_color' => $status->color(),
                     'amount' => $presented['amount'] ?? 0,
                     'remaining' => $presented['remaining'] ?? 0,
                 ];

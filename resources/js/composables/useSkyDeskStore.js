@@ -97,7 +97,7 @@ export function useSkyDeskStore() {
     const contactCount = computed(() => contacts.value.length);
 
     const financeAttentionCount = computed(
-        () => advances.value.filter((a) => ['pending', 'received', 'reporting'].includes(a.status_id)).length,
+        () => advances.value.filter((a) => ['pending', 'approved', 'reporting'].includes(a.status_id)).length,
     );
 
     const formatMoney = (n) => `${Number(n || 0).toLocaleString('ru-RU')} ₽`;
@@ -310,9 +310,9 @@ export function useSkyDeskStore() {
                 task_id: payload.task_id ?? null,
                 task_ids: payload.task_ids ?? null,
                 amount: Number(payload.amount) || 0,
-                status_id: payload.status_id || defaultAdvanceStatusId(),
                 disbursement_method_id: payload.disbursement_method_id || null,
                 note: payload.note || '',
+                needed_at: payload.needed_at || null,
             }, {
                 ...visitOpts,
                 onSuccess: (pageResult) => {
@@ -323,7 +323,8 @@ export function useSkyDeskStore() {
         });
 
     const updateAdvance = (id, patch) => {
-        debouncedPut(`advance-${id}`, `/advances/${id}`, patch);
+        const { status_id, status, ...safe } = patch || {};
+        debouncedPut(`advance-${id}`, `/advances/${id}`, safe);
     };
 
     const removeAdvance = (advanceId) => {
@@ -415,8 +416,28 @@ export function useSkyDeskStore() {
         router.post(`/advances/${advanceId}/close-to-wallet`, {}, visitOpts);
     };
 
-    const closeAdvanceWriteOff = (advanceId) => {
-        router.post(`/advances/${advanceId}/close-writeoff`, {}, visitOpts);
+    const approveAdvance = (advanceId) => {
+        router.post(`/advances/${advanceId}/approve`, {}, {
+            ...visitOpts,
+            onError: (errors) => {
+                const msg = errors?.advance;
+                if (msg) window.alert(Array.isArray(msg) ? msg[0] : msg);
+            },
+        });
+    };
+
+    const receiveAdvance = (advanceId, payload = {}) => {
+        router.post(`/advances/${advanceId}/receive`, {
+            amount: payload.amount != null ? Number(payload.amount) : null,
+            disbursement_method_id: payload.disbursement_method_id || null,
+            issued_at: payload.issued_at || null,
+        }, {
+            ...visitOpts,
+            onError: (errors) => {
+                const msg = errors?.advance || errors?.amount || errors?.disbursement_method_id;
+                if (msg) window.alert(Array.isArray(msg) ? msg[0] : msg);
+            },
+        });
     };
 
     const attachExpenseToAdvance = (advanceId, expenseId, debitAccount = 'advance') => {
@@ -591,7 +612,8 @@ export function useSkyDeskStore() {
         topUpWallet,
         updateTopUp,
         closeAdvanceToWallet,
-        closeAdvanceWriteOff,
+        approveAdvance,
+        receiveAdvance,
         attachExpenseToAdvance,
         detachExpenseFromAdvance,
         createSupplier,
