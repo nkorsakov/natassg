@@ -26,48 +26,39 @@ const formatDeadline = (dl) => {
     });
 };
 
+const isDoneStatus = (id) => id === 'done';
+const isCancelledStatus = (id) => id === 'cancelled';
+const isDraftStatus = (id) => id === 'draft';
+const isHiddenFilterStatus = (id) => isCancelledStatus(id) || isDraftStatus(id);
+
 const filters = computed(() => {
     const roots = store.rootTasks.value;
-    const today = new Date().toISOString().slice(0, 10);
-    const statusColor = (slug) => store.getStatus(slug)?.color;
-    return [
-        { value: 'all', label: `Все · ${roots.length}`, color: null },
-        {
-            value: 'today',
-            label: `Сегодня · ${roots.filter((t) => t.deadline?.startsWith(today)).length}`,
-            color: null,
-        },
-        {
-            value: 'in_progress',
-            label: `В работе · ${roots.filter((t) => t.status_id === 'in_progress').length}`,
-            color: statusColor('in_progress'),
-        },
-        {
-            value: 'waiting_money',
-            label: `Ждут денег · ${roots.filter((t) => t.status_id === 'waiting_money').length}`,
-            color: statusColor('waiting_money'),
-        },
-        {
-            value: 'done',
-            label: `Готово · ${roots.filter((t) => t.status_id === 'done').length}`,
-            color: statusColor('done'),
-        },
+    const statuses = store.dictionaries.value.statuses || [];
+    const activeCount = roots.filter((t) => !isDoneStatus(t.status_id)).length;
+
+    const items = [
+        { value: 'all', label: `Все · ${activeCount}`, color: null, separate: false },
     ];
+
+    for (const status of statuses) {
+        if (isHiddenFilterStatus(status.id)) continue;
+        items.push({
+            value: status.id,
+            label: `${status.label} · ${roots.filter((t) => t.status_id === status.id).length}`,
+            color: status.color,
+            separate: isDoneStatus(status.id),
+        });
+    }
+
+    return items;
 });
 
 const visibleTasks = computed(() => {
     let list = store.rootTasks.value;
-    const today = new Date().toISOString().slice(0, 10);
-    if (filter.value === 'today') {
-        list = list.filter((t) => t.deadline?.startsWith(today));
-    } else if (filter.value === 'in_progress') {
-        list = list.filter((t) => t.status_id === 'in_progress');
-    } else if (filter.value === 'waiting_money') {
-        list = list.filter((t) => t.status_id === 'waiting_money');
-    } else if (filter.value === 'done') {
-        list = list.filter((t) => t.status_id === 'done');
+    if (filter.value === 'all') {
+        list = list.filter((t) => !isDoneStatus(t.status_id) && !isCancelledStatus(t.status_id));
     } else {
-        list = list.filter((t) => t.status_id !== 'done' && t.status_id !== 'cancelled');
+        list = list.filter((t) => t.status_id === filter.value);
     }
     return list;
 });
@@ -114,17 +105,23 @@ const filterChipStyle = (f) => {
             class="d-flex ga-2 mb-5"
             :style="mdAndUp ? '' : 'overflow-x:auto;margin:0 -16px;padding:0 16px 4px'"
         >
-            <v-chip
-                v-for="f in filters"
-                :key="f.value"
-                :color="filter === f.value && !f.color ? 'primary' : undefined"
-                :variant="filter === f.value ? 'flat' : 'tonal'"
-                class="flex-shrink-0"
-                :style="filterChipStyle(f)"
-                @click="filter = f.value"
-            >
-                {{ f.label }}
-            </v-chip>
+            <template v-for="f in filters" :key="f.value">
+                <div
+                    v-if="f.separate"
+                    class="flex-grow-1 flex-shrink-0"
+                    style="min-width: 24px"
+                    aria-hidden="true"
+                />
+                <v-chip
+                    :color="filter === f.value && !f.color ? 'primary' : undefined"
+                    :variant="filter === f.value ? 'flat' : 'tonal'"
+                    class="flex-shrink-0"
+                    :style="filterChipStyle(f)"
+                    @click="filter = f.value"
+                >
+                    {{ f.label }}
+                </v-chip>
+            </template>
         </div>
 
         <v-row>

@@ -67,9 +67,9 @@ watch(mdAndUp, (v) => {
 const items = computed(() => [
     { title: 'Главная', icon: 'mdi-home-outline', href: '/dashboard', badge: null },
     { title: 'Поручения', icon: 'mdi-check-circle-outline', href: '/tasks', badge: store.activeTaskCount.value || null },
-    { title: 'Календарь', icon: 'mdi-calendar-month-outline', href: '/calendar', badge: store.upcomingEventCount.value || null },
-    { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: store.financeAttentionCount.value || null },
-    { title: 'Контакты', icon: 'mdi-account-outline', href: '/contacts', badge: store.contactCount.value || null },
+    { title: 'Календарь', icon: 'mdi-calendar-month-outline', href: '/calendar', badge: null },
+    { title: 'Финансы', icon: 'mdi-currency-rub', href: '/finance', badge: null },
+    { title: 'Контакты', icon: 'mdi-account-outline', href: '/contacts', badge: null },
 ]);
 
 const currentPath = computed(() => page.url.split('?')[0]);

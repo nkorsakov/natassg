@@ -76,7 +76,7 @@ export function useSkyDeskStore() {
     const rootTasks = computed(() => tasks.value.filter((t) => !t.parent_id));
 
     const activeTaskCount = computed(
-        () => tasks.value.filter((t) => !['done', 'cancelled', 'draft'].includes(t.status_id)).length,
+        () => rootTasks.value.filter((t) => !['done', 'cancelled'].includes(t.status_id)).length,
     );
 
     const waitingMoneyCount = computed(
