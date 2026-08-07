@@ -12,6 +12,9 @@
     <meta name="apple-mobile-web-app-title" content="{{ config('app.name', 'SkyDesk') }}">
     <meta name="application-name" content="{{ config('app.name', 'SkyDesk') }}">
     <meta name="description" content="SkyDesk — поручения, календарь и финансы для личного помощника">
+    <link rel="manifest" href="/build/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">

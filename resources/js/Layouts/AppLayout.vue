@@ -11,6 +11,7 @@ import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
 import { useSkyDeskStore } from '@/composables/useSkyDeskStore';
 import { useWorkspaceUi } from '@/composables/useWorkspaceUi';
+import { useOffline } from '@/composables/useOffline';
 
 const props = defineProps({
     title: { type: String, default: 'SkyDesk' },
@@ -22,6 +23,7 @@ const { mdAndUp } = useDisplay();
 const theme = useTheme();
 const { isDark } = useAppearance();
 const store = useSkyDeskStore();
+const { isOnline, lastSyncedLabel } = useOffline();
 const {
     taskOpen,
     taskId,
@@ -103,7 +105,13 @@ const profile = computed(() => {
 const isActive = (href) => currentPath.value === href;
 const go = (href) => router.visit(href);
 
-const openCreate = () => openQuickCreate();
+const openCreate = () => {
+    if (!isOnline.value) {
+        window.alert('Изменения доступны только при подключении к интернету');
+        return;
+    }
+    openQuickCreate();
+};
 const openSettings = () => router.visit('/settings');
 const openReport = () => router.visit('/reports');
 const logout = () => router.post('/logout');
@@ -119,6 +127,17 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
 
 <template>
     <v-app>
+        <div
+            v-if="!isOnline"
+            class="skydesk-offline-banner"
+            role="status"
+        >
+            <v-icon size="18" class="me-2">mdi-cloud-off-outline</v-icon>
+            <span>
+                Офлайн-режим · просмотр последнего снимка
+                <template v-if="lastSyncedLabel"> · {{ lastSyncedLabel }}</template>
+            </span>
+        </div>
         <!-- Desktop sidebar -->
         <v-navigation-drawer
             v-if="mdAndUp"
@@ -178,6 +197,7 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
                         height="45"
                         prepend-icon="mdi-plus"
                         class="skydesk-drawer__cta"
+                        :disabled="!isOnline"
                         @click="openCreate"
                     >
                         Новое поручение
@@ -340,6 +360,7 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
             elevation="8"
             class="skydesk-fab"
             style="position:fixed;right:20px;bottom:88px;z-index:21;border-radius:18px !important"
+            :disabled="!isOnline"
             @click="openCreate"
         >
             <v-icon size="32">mdi-plus</v-icon>
@@ -381,6 +402,24 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
 </template>
 
 <style scoped>
+.skydesk-offline-banner {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 12px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    background: rgba(233, 102, 103, 0.92);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-align: center;
+}
+
 .skydesk-drawer {
     background:
         radial-gradient(120% 80% at 10% -10%, rgba(var(--v-theme-primary), 0.38), transparent 52%),
