@@ -14,9 +14,20 @@ use Inertia\Response;
 
 class AuthController extends Controller
 {
-    public function create(): Response
+    public function create(Request $request): Response
     {
-        return Inertia::render('Auth/Login');
+        $prefill = null;
+        if ($request->boolean('demo')) {
+            $prefill = [
+                'email' => 'demo',
+                'password' => 'demo',
+            ];
+        }
+
+        return Inertia::render('Auth/Login', [
+            'status' => $request->session()->get('status'),
+            'prefill' => $prefill,
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -59,7 +70,7 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect()->route('home');
     }
 
     public function telegram(Request $request, TelegramInitDataValidator $validator): RedirectResponse
@@ -91,7 +102,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Принимает nkorsakov / nataliya или полный email.
+     * Принимает nkorsakov / nataliya / demo или полный email.
      */
     protected function resolveEmail(string $login): string
     {

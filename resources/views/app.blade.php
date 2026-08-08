@@ -11,14 +11,43 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="{{ config('app.name', 'SkyDesk') }}">
     <meta name="application-name" content="{{ config('app.name', 'SkyDesk') }}">
-    <meta name="description" content="SkyDesk — поручения, календарь и финансы для личного помощника">
+    @php
+        $seo = $seo ?? null;
+        $seoTitle = $seo['title'] ?? null;
+        $seoDescription = $seo['description'] ?? 'SkyDesk — поручения, календарь и финансы для личного помощника';
+        $seoUrl = $seo['url'] ?? null;
+        $seoImage = $seo['image'] ?? null;
+    @endphp
+    <meta name="description" content="{{ $seoDescription }}">
+    @if ($seoTitle)
+        <title>{{ $seoTitle }}</title>
+        <meta property="og:type" content="website">
+        <meta property="og:locale" content="ru_RU">
+        <meta property="og:site_name" content="SkyDesk">
+        <meta property="og:title" content="{{ $seoTitle }}">
+        <meta property="og:description" content="{{ $seoDescription }}">
+        @if ($seoUrl)
+            <meta property="og:url" content="{{ $seoUrl }}">
+            <link rel="canonical" href="{{ $seoUrl }}">
+        @endif
+        @if ($seoImage)
+            <meta property="og:image" content="{{ $seoImage }}">
+        @endif
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="{{ $seoTitle }}">
+        <meta name="twitter:description" content="{{ $seoDescription }}">
+        @if (!empty($seo['json_ld']))
+            <script type="application/ld+json">{!! json_encode($seo['json_ld'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}</script>
+        @endif
+    @else
+        <title inertia>{{ config('app.name', 'SkyDesk') }}</title>
+    @endif
     <link rel="manifest" href="/build/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
-    <title inertia>{{ config('app.name', 'SkyDesk') }}</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @inertiaHead

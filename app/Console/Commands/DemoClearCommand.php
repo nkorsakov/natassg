@@ -9,11 +9,11 @@ class DemoClearCommand extends Command
 {
     protected $signature = 'demo:clear';
 
-    protected $description = 'Удалить только демо-данные (is_demo=true). НЕ делает migrate:fresh.';
+    protected $description = 'Удалить workspace демо-пользователей и is_demo-записи. НЕ делает migrate:fresh.';
 
     public function handle(): int
     {
-        $this->warn('Удаляю только записи с is_demo=true. Словари и пользователи остаются.');
+        $this->warn('Удаляю workspace демо-пользователей и записи is_demo=true. Словари и пользователи остаются.');
 
         $stats = DemoData::clear();
 

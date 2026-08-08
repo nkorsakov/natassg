@@ -34,6 +34,7 @@ class SkyDeskPresenter
             'role' => $user->role_title ?: 'Личный помощник',
             'email' => $user->email,
             'is_admin' => (bool) $user->is_admin,
+            'is_demo' => (bool) $user->is_demo,
             'telegram_id' => $user->telegram_id,
         ];
     }

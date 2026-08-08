@@ -19,6 +19,7 @@ class UserSeeder extends Seeder
                 'role_title' => 'Владелец',
                 'password' => $password,
                 'is_admin' => true,
+                'is_demo' => false,
                 'email_verified_at' => now(),
             ],
         );
@@ -31,6 +32,20 @@ class UserSeeder extends Seeder
                 'role_title' => 'Личный помощник',
                 'password' => $password,
                 'is_admin' => false,
+                'is_demo' => false,
+                'email_verified_at' => now(),
+            ],
+        );
+
+        User::updateOrCreate(
+            ['email' => 'demo@skydesk.local'],
+            [
+                'name' => 'Демо',
+                'initials' => 'ДМ',
+                'role_title' => 'Личный помощник',
+                'password' => 'demo',
+                'is_admin' => false,
+                'is_demo' => true,
                 'email_verified_at' => now(),
             ],
         );

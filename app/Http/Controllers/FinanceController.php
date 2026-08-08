@@ -261,6 +261,10 @@ class FinanceController extends Controller
             ->values()
             ->all();
 
+        if ($request->user()?->is_demo && $data['receipt_files'] !== []) {
+            abort(403, 'В демо нельзя загружать файлы.');
+        }
+
         try {
             $expenses->addExpense($request->user(), $data, $target);
         } catch (InvalidArgumentException $e) {
@@ -312,6 +316,7 @@ class FinanceController extends Controller
         ExpenseService $expenses,
     ): RedirectResponse {
         abort_unless($request->user()?->canAccessOwned($expense->user_id), 403);
+        abort_if($request->user()?->is_demo, 403, 'В демо нельзя загружать файлы.');
 
         $data = $request->validate([
             'file' => ['required', 'file', 'max:20480'],

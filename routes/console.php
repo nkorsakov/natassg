@@ -27,3 +27,8 @@ Schedule::command(DigestEveningCommand::class)
     ->dailyAt(config('notifications.digest.evening', '22:00'))
     ->timezone($tz)
     ->withoutOverlapping();
+
+Schedule::command('demo:seed')
+    ->dailyAt('07:00')
+    ->timezone($tz)
+    ->withoutOverlapping();

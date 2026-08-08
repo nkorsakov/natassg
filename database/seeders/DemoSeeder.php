@@ -26,14 +26,32 @@ class DemoSeeder extends Seeder
 {
     public function run(): void
     {
+        $user = User::query()->where('is_demo', true)->first()
+            ?? User::query()->where('email', 'demo@skydesk.local')->first();
+
+        if (! $user) {
+            $user = User::updateOrCreate(
+                ['email' => 'demo@skydesk.local'],
+                [
+                    'name' => 'Демо',
+                    'initials' => 'ДМ',
+                    'role_title' => 'Личный помощник',
+                    'password' => 'demo',
+                    'is_admin' => false,
+                    'is_demo' => true,
+                    'email_verified_at' => now(),
+                ],
+            );
+        } elseif (! $user->is_demo) {
+            $user->forceFill(['is_demo' => true])->save();
+        }
+
+        // Сброс пароля демо-аккаунта на известный (на случай смены в UI)
+        $user->forceFill(['password' => 'demo'])->save();
+        $user = $user->fresh();
+
         DemoData::clear();
 
-        $user = User::query()->where('email', 'nataliya@skydesk.local')->first();
-        if (! $user) {
-            $this->command?->warn('Пользователь nataliya@skydesk.local не найден. Сначала UserSeeder.');
-
-            return;
-        }
 
         $tasks = app(TaskService::class);
         $advances = app(AdvanceService::class);
@@ -46,7 +64,7 @@ class DemoSeeder extends Seeder
         // --- Контакты и поставщики ---
         $contactLinked = DemoData::mark(Contact::create([
             'user_id' => $user->id,
-            'name' => '[DEMO] ООО Цветы',
+            'name' => 'ООО Цветы',
             'role' => 'Поставщик',
             'phone' => '+7 900 111-22-33',
             'note' => 'Контакт с привязкой к поставщику',
@@ -55,20 +73,20 @@ class DemoSeeder extends Seeder
 
         $supplierLinked = DemoData::mark(Supplier::create([
             'user_id' => $user->id,
-            'name' => '[DEMO] ООО Цветы',
+            'name' => 'ООО Цветы',
             'contact_id' => $contactLinked->id,
             'note' => 'Поставщик с контактом',
         ]));
 
         $supplierSolo = DemoData::mark(Supplier::create([
             'user_id' => $user->id,
-            'name' => '[DEMO] Такси без контакта',
+            'name' => 'Такси без контакта',
             'note' => 'Поставщик без контакта',
         ]));
 
         DemoData::mark(Contact::create([
             'user_id' => $user->id,
-            'name' => '[DEMO] Иван Петров',
+            'name' => 'Иван Петров',
             'role' => 'Водитель',
             'phone' => '+7 900 222-33-44',
             'note' => 'Обычный контакт, не поставщик',
@@ -78,16 +96,16 @@ class DemoSeeder extends Seeder
         // --- Кошелёк: пополнения обоими способами ---
         $topup = $wallet->topUp($user, [
             'amount' => 150000,
-            'title' => '[DEMO] Стартовое пополнение',
-            'note' => '[DEMO] Перевод на карту',
+            'title' => 'Стартовое пополнение',
+            'note' => 'Перевод на карту',
             'disbursement_method_id' => 'transfer',
         ]);
         DemoData::mark($topup);
 
         $topupCash = $wallet->topUp($user, [
             'amount' => 10000,
-            'title' => '[DEMO] Наличка в офисе',
-            'note' => '[DEMO] Получено в кассе',
+            'title' => 'Наличка в офисе',
+            'note' => 'Получено в кассе',
             'disbursement_method_id' => 'cash_office',
         ]);
         DemoData::mark($topupCash);
@@ -95,7 +113,7 @@ class DemoSeeder extends Seeder
         // --- События всех типов ---
         $eventMeeting = $this->event($user, [
             'type' => 'meeting',
-            'title' => '[DEMO] Встреча с подрядчиком',
+            'title' => 'Встреча с подрядчиком',
             'start' => $now->copy()->addDay()->setTime(11, 0),
             'end' => $now->copy()->addDay()->setTime(12, 30),
             'place' => 'Офис на Тверской',
@@ -104,7 +122,7 @@ class DemoSeeder extends Seeder
 
         $eventTrip = $this->event($user, [
             'type' => 'trip',
-            'title' => '[DEMO] Поездка в аэропорт',
+            'title' => 'Поездка в аэропорт',
             'start' => $now->copy()->addDays(3)->setTime(6, 0),
             'end' => $now->copy()->addDays(3)->setTime(9, 0),
             'place' => 'Шереметьево',
@@ -112,7 +130,7 @@ class DemoSeeder extends Seeder
 
         $eventPersonal = $this->event($user, [
             'type' => 'personal',
-            'title' => '[DEMO] Личное — день рождения',
+            'title' => 'Личное — день рождения',
             'start' => $now->copy()->addDays(10)->startOfDay(),
             'end' => $now->copy()->addDays(10)->endOfDay(),
             'all_day' => true,
@@ -120,7 +138,7 @@ class DemoSeeder extends Seeder
 
         $eventOther = $this->event($user, [
             'type' => 'other',
-            'title' => '[DEMO] Прочее событие без поручений',
+            'title' => 'Прочее событие без поручений',
             'start' => $now->copy()->subDays(2)->setTime(15, 0),
             'end' => $now->copy()->subDays(2)->setTime(16, 0),
             'note' => 'Прошлое событие',
@@ -128,13 +146,13 @@ class DemoSeeder extends Seeder
 
         // --- Поручения: все статусы / приоритеты / типы ---
         $statusMatrix = [
-            ['status_id' => 'draft', 'priority_id' => 'normal', 'type_id' => 'purchase', 'title' => '[DEMO] Черновик: купить воду'],
-            ['status_id' => 'new', 'priority_id' => 'normal', 'type_id' => 'call', 'title' => '[DEMO] Новое: позвонить флористу'],
-            ['status_id' => 'in_progress', 'priority_id' => 'high', 'type_id' => 'organize', 'title' => '[DEMO] В работе: организовать ужин'],
-            ['status_id' => 'waiting_money', 'priority_id' => 'urgent', 'type_id' => 'purchase', 'title' => '[DEMO] Ждёт денег: закупка декора'],
-            ['status_id' => 'waiting', 'priority_id' => 'normal', 'type_id' => 'search', 'title' => '[DEMO] Ждёт кого-то: ответ от площадки'],
-            ['status_id' => 'done', 'priority_id' => 'normal', 'type_id' => 'call', 'title' => '[DEMO] Готово: подтвердить бронь'],
-            ['status_id' => 'cancelled', 'priority_id' => 'high', 'type_id' => 'search', 'title' => '[DEMO] Отменено: поиск редкого вина'],
+            ['status_id' => 'draft', 'priority_id' => 'normal', 'type_id' => 'purchase', 'title' => 'Черновик: купить воду'],
+            ['status_id' => 'new', 'priority_id' => 'normal', 'type_id' => 'call', 'title' => 'Новое: позвонить флористу'],
+            ['status_id' => 'in_progress', 'priority_id' => 'high', 'type_id' => 'organize', 'title' => 'В работе: организовать ужин'],
+            ['status_id' => 'waiting_money', 'priority_id' => 'urgent', 'type_id' => 'purchase', 'title' => 'Ждёт денег: закупка декора'],
+            ['status_id' => 'waiting', 'priority_id' => 'normal', 'type_id' => 'search', 'title' => 'Ждёт кого-то: ответ от площадки'],
+            ['status_id' => 'done', 'priority_id' => 'normal', 'type_id' => 'call', 'title' => 'Готово: подтвердить бронь'],
+            ['status_id' => 'cancelled', 'priority_id' => 'high', 'type_id' => 'search', 'title' => 'Отменено: поиск редкого вина'],
         ];
 
         $taskByStatus = [];
@@ -156,7 +174,7 @@ class DemoSeeder extends Seeder
             'status_id' => 'in_progress',
             'priority_id' => 'high',
             'type_id' => 'organize',
-            'title' => '[DEMO] Родитель: подготовка мероприятия',
+            'title' => 'Родитель: подготовка мероприятия',
             'note' => 'С подзадачами',
             'deadline' => $now->copy()->addDays(7)->setTime(20, 0)->format('Y-m-d\TH:i'),
             'event_ids' => [$eventMeeting->id],
@@ -169,7 +187,7 @@ class DemoSeeder extends Seeder
             'status_id' => 'new',
             'priority_id' => 'normal',
             'type_id' => 'purchase',
-            'title' => '[DEMO] Подзадача: купить цветы',
+            'title' => 'Подзадача: купить цветы',
         ]);
         DemoData::mark($childA);
 
@@ -178,7 +196,7 @@ class DemoSeeder extends Seeder
             'status_id' => 'waiting_money',
             'priority_id' => 'urgent',
             'type_id' => 'purchase',
-            'title' => '[DEMO] Подзадача: заказать кейтеринг',
+            'title' => 'Подзадача: заказать кейтеринг',
             'event_ids' => [$eventMeeting->id, $eventTrip->id],
         ]);
         DemoData::mark($childB);
@@ -188,7 +206,7 @@ class DemoSeeder extends Seeder
             'status_id' => 'new',
             'priority_id' => 'urgent',
             'type_id' => 'call',
-            'title' => '[DEMO] С ручным напоминанием',
+            'title' => 'С ручным напоминанием',
             'deadline' => $now->copy()->addDays(2)->setTime(12, 0)->format('Y-m-d\TH:i'),
         ]);
         DemoData::mark($manualTask);
@@ -196,7 +214,7 @@ class DemoSeeder extends Seeder
         $manualReminder = $reminders->createManual(
             $manualTask,
             $now->copy()->addDay()->setTime(9, 0),
-            '[DEMO] Не забыть позвонить',
+            'Не забыть позвонить',
         );
         DemoData::mark($manualReminder);
 
@@ -205,7 +223,7 @@ class DemoSeeder extends Seeder
             'status_id' => 'in_progress',
             'priority_id' => 'high',
             'type_id' => 'organize',
-            'title' => '[DEMO] Сопровождение поездки',
+            'title' => 'Сопровождение поездки',
             'event_ids' => [$eventTrip->id],
         ]);
         DemoData::mark($tripTask);
@@ -215,14 +233,14 @@ class DemoSeeder extends Seeder
             'status_id' => 'new',
             'priority_id' => 'normal',
             'type_id' => 'purchase',
-            'title' => '[DEMO] Купить подарок',
+            'title' => 'Купить подарок',
             'event_ids' => [$eventPersonal->id],
         ]);
         DemoData::mark($giftTask);
 
         // --- Авансы: все статусы и финансовые сценарии ---
         $advPending = $advances->create($user, [
-            'title' => '[DEMO] Заявка на аванс',
+            'title' => 'Заявка на аванс',
             'amount' => 5000,
             'note' => 'Ещё не утверждены',
             'task_ids' => [$taskByStatus['waiting_money']->id],
@@ -230,7 +248,7 @@ class DemoSeeder extends Seeder
         DemoData::mark($advPending);
 
         $advApproved = $advances->create($user, [
-            'title' => '[DEMO] Утвердили, ждём деньги',
+            'title' => 'Утвердили, ждём деньги',
             'amount' => 7000,
             'disbursement_method_id' => 'transfer',
             'note' => 'Обещали перевод',
@@ -241,7 +259,7 @@ class DemoSeeder extends Seeder
 
         // Approved → receive → частичная трата → reporting
         $advReporting = $advances->create($user, [
-            'title' => '[DEMO] Аванс на отчёте (частично потрачен)',
+            'title' => 'Аванс на отчёте (частично потрачен)',
             'amount' => 10000,
             'disbursement_method_id' => 'transfer',
             'task_ids' => [$parent->id],
@@ -251,7 +269,7 @@ class DemoSeeder extends Seeder
         $advances->approve($advReporting);
         $advances->receive($advReporting->fresh(), [
             'disbursement_method_id' => 'transfer',
-            'issued_at' => now()->toDateString(),
+            'issued_at' => $now->toDateString(),
         ]);
         DemoData::markWalletForAdvance($advReporting);
 
@@ -259,7 +277,7 @@ class DemoSeeder extends Seeder
             'amount' => 3500,
             'article_id' => 'supplies',
             'supplier_id' => $supplierLinked->id,
-            'description' => '[DEMO] Частичная трата по авансу',
+            'description' => 'Частичная трата по авансу',
             'task_id' => $childA->id,
             'debit_account' => 'advance',
         ], $advReporting->fresh());
@@ -269,7 +287,7 @@ class DemoSeeder extends Seeder
 
         // Receive → полная трата → auto-close
         $advAutoclose = $advances->create($user, [
-            'title' => '[DEMO] Аванс закрыт полной тратой',
+            'title' => 'Аванс закрыт полной тратой',
             'amount' => 2000,
             'disbursement_method_id' => 'cash_office',
             'task_ids' => [$giftTask->id],
@@ -278,7 +296,7 @@ class DemoSeeder extends Seeder
         $advances->approve($advAutoclose);
         $advances->receive($advAutoclose->fresh(), [
             'disbursement_method_id' => 'cash_office',
-            'issued_at' => now()->toDateString(),
+            'issued_at' => $now->toDateString(),
         ]);
         DemoData::markWalletForAdvance($advAutoclose);
 
@@ -286,7 +304,7 @@ class DemoSeeder extends Seeder
             'amount' => 2000,
             'article_id' => 'other',
             'supplier_id' => $supplierSolo->id,
-            'description' => '[DEMO] Полная трата — автозакрытие',
+            'description' => 'Полная трата — автозакрытие',
             'debit_account' => 'advance',
         ], $advAutoclose->fresh());
         DemoData::mark($expFull);
@@ -295,7 +313,7 @@ class DemoSeeder extends Seeder
 
         // Close to wallet
         $advToWallet = $advances->create($user, [
-            'title' => '[DEMO] Аванс закрыт: остаток → кошелёк',
+            'title' => 'Аванс закрыт: остаток → кошелёк',
             'amount' => 4000,
             'disbursement_method_id' => 'transfer',
         ]);
@@ -303,7 +321,7 @@ class DemoSeeder extends Seeder
         $advances->approve($advToWallet);
         $advances->receive($advToWallet->fresh(), [
             'disbursement_method_id' => 'transfer',
-            'issued_at' => now()->toDateString(),
+            'issued_at' => $now->copy()->subDay()->toDateString(),
         ]);
         DemoData::markWalletForAdvance($advToWallet);
 
@@ -311,7 +329,7 @@ class DemoSeeder extends Seeder
             'amount' => 1500,
             'article_id' => 'transport',
             'supplier_id' => $supplierSolo->id,
-            'description' => '[DEMO] Трата перед закрытием в кошелёк',
+            'description' => 'Трата перед закрытием в кошелёк',
             'debit_account' => 'advance',
         ], $advToWallet->fresh());
         DemoData::mark($expToWallet);
@@ -322,7 +340,7 @@ class DemoSeeder extends Seeder
 
         // Чистый reporting без трат
         $advReceivedOpen = $advances->create($user, [
-            'title' => '[DEMO] Деньги получены, трат ещё нет',
+            'title' => 'Деньги получены, трат ещё нет',
             'amount' => 6000,
             'disbursement_method_id' => 'transfer',
             'task_ids' => [$tripTask->id],
@@ -332,7 +350,7 @@ class DemoSeeder extends Seeder
         $advances->approve($advReceivedOpen);
         $advances->receive($advReceivedOpen->fresh(), [
             'disbursement_method_id' => 'transfer',
-            'issued_at' => now()->toDateString(),
+            'issued_at' => $now->toDateString(),
         ]);
         DemoData::markWalletForAdvance($advReceivedOpen);
 
@@ -343,8 +361,9 @@ class DemoSeeder extends Seeder
                 'amount' => 300 + ($i * 50),
                 'article_id' => $article,
                 'supplier_id' => $i % 2 === 0 ? $supplierSolo->id : $supplierLinked->id,
-                'description' => "[DEMO] Расход: {$article}",
+                'description' => "Расход: {$article}",
                 'debit_account' => $i % 2 === 0 ? 'unassigned' : 'wallet',
+                'occurred_at' => $now->copy()->subDays($i + 1)->toDateString(),
             ]);
             DemoData::mark($exp);
             DemoData::markWalletForExpense($exp);
@@ -353,7 +372,7 @@ class DemoSeeder extends Seeder
         // Неиспользуемое событие other уже создано
         unset($eventOther);
 
-        $this->command?->info('Демо-данные загружены для nataliya@skydesk.local (флаг is_demo).');
+        $this->command?->info('Демо-данные загружены для '.$user->email.' (флаг is_demo).');
         $this->command?->info('Убрать: php artisan demo:clear');
     }
 

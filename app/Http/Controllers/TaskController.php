@@ -115,6 +115,7 @@ class TaskController extends Controller
         TaskAttachmentService $attachments,
     ): RedirectResponse {
         $this->authorizeTask($request, $task);
+        abort_if($request->user()?->is_demo, 403, 'В демо нельзя загружать файлы.');
 
         $data = $request->validate([
             'file' => ['required', 'file', 'max:20480'],

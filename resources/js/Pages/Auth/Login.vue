@@ -5,8 +5,12 @@ import { useDisplay, useTheme } from 'vuetify';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
 
-defineProps({
+const props = defineProps({
     status: { type: String, default: null },
+    prefill: {
+        type: Object,
+        default: null,
+    },
 });
 
 const { mdAndUp } = useDisplay();
@@ -14,8 +18,8 @@ const theme = useTheme();
 const { isDark } = useAppearance();
 
 const form = useForm({
-    email: '',
-    password: '',
+    email: props.prefill?.email ?? '',
+    password: props.prefill?.password ?? '',
     remember: true,
 });
 

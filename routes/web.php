@@ -6,6 +6,7 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\LandingController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\ReminderController;
 use App\Http\Controllers\PublicFinanceController;
@@ -14,7 +15,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/login');
+Route::get('/', LandingController::class)->name('home');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'create'])->name('login');

@@ -90,6 +90,7 @@ const todayLabel = computed(() =>
 
 const primaryColor = computed(() => theme.current.value.colors.primary);
 const authUser = computed(() => page.props.auth?.user);
+const isDemoUser = computed(() => Boolean(authUser.value?.is_demo));
 const profile = computed(() => {
     const user = authUser.value;
     if (user) {
@@ -137,6 +138,14 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
                 Офлайн-режим · просмотр последнего снимка
                 <template v-if="lastSyncedLabel"> · {{ lastSyncedLabel }}</template>
             </span>
+        </div>
+        <div
+            v-else-if="isDemoUser"
+            class="skydesk-demo-banner"
+            role="status"
+        >
+            <v-icon size="18" class="me-2">mdi-flask-outline</v-icon>
+            <span>Демо-режим. Данные сбрасываются каждый день в 07:00.</span>
         </div>
         <!-- Desktop sidebar -->
         <v-navigation-drawer
@@ -413,6 +422,24 @@ defineExpose({ openCreate, openTask, openEvent, openAdvance, openAdvanceCreate, 
     padding: 8px 12px;
     padding-top: calc(8px + env(safe-area-inset-top, 0px));
     background: rgba(233, 102, 103, 0.92);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-align: center;
+}
+
+.skydesk-demo-banner {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 12px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    background: rgba(47, 111, 237, 0.92);
     color: #fff;
     font-size: 12px;
     font-weight: 600;

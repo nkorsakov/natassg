@@ -68,13 +68,13 @@ npm install && npm run dev
 **НА РАБОЧЕЙ БД ЭТО ЗАПРЕЩЕНО.** Только `migrate` вперёд. Демо-данные — отдельно:
 
 ```bash
-docker compose exec natassg-app php artisan demo:seed   # наполнить демо
-docker compose exec natassg-app php artisan demo:clear  # убрать только демо (is_demo)
+docker compose exec natassg-app php artisan demo:seed   # наполнить демо (пользователь demo)
+docker compose exec natassg-app php artisan demo:clear  # убрать workspace демо-пользователя
 ```
 
-После сидера создаются пользователи `nkorsakov` и `nataliya` (полный email: `…@skydesk.local`). Пароль задаётся в сидере / окружении, в README не публикуется.
+После сидера создаются пользователи `nkorsakov`, `nataliya` и `demo` (полный email: `…@skydesk.local`). Пароли реальных пользователей в README не публикуются; демо — логин/пароль `demo` / `demo`.
 
-Сиды заполняют только словари и пользователей (с пустым кошельком). Поручения, события, авансы и контакты стартуют пустыми — пока не запущен `demo:seed`.
+Сиды заполняют только словари и пользователей (с пустым кошельком). Поручения, события, авансы и контакты стартуют пустыми — пока не запущен `demo:seed` (льёт данные только в `demo`).
 
 ## Рабочие экраны
 
