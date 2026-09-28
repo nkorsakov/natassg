@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import { useTheme } from 'vuetify';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
+import { reachGoal } from '@/analytics/metrika';
 
 const page = usePage();
 const theme = useTheme();
@@ -69,12 +70,18 @@ const seoTitle = 'Рабочее пространство личного пом�
 const seoDescription =
     'Поручения, календарь, деньги на руках и отчёты — всё в одном окне. 30 дней бесплатно, далее от 500 ₽/мес.';
 
-const openAccess = () => {
+const track = (goal, place) => {
+    reachGoal(goal, place ? { place } : undefined);
+};
+
+const openAccess = (place = 'unknown') => {
+    track('landing_request_access', place);
     accessHint.value = false;
     accessOpen.value = true;
 };
 
 const submitAccessStub = () => {
+    track('landing_request_submit', 'modal');
     accessHint.value = true;
 };
 
@@ -135,7 +142,11 @@ const closePreview = () => {
 
                     <div class="landing-header__actions">
                         <template v-if="isAuthenticated">
-                            <Link href="/dashboard" class="landing-btn landing-btn--primary">
+                            <Link
+                                href="/dashboard"
+                                class="landing-btn landing-btn--primary"
+                                @click="track('landing_return', 'header')"
+                            >
                                 <span class="landing-btn__full">Вернуться в систему</span>
                                 <span class="landing-btn__short">В систему</span>
                             </Link>
@@ -145,16 +156,24 @@ const closePreview = () => {
                                 <button
                                     type="button"
                                     class="landing-btn landing-btn--ghost"
-                                    @click="openAccess"
+                                    @click="openAccess('header')"
                                 >
                                     Запросить доступ
                                 </button>
                                 <span class="landing-or" aria-hidden="true">или</span>
-                                <Link href="/login?demo=1" class="landing-btn landing-btn--ghost">
+                                <Link
+                                    href="/login?demo=1"
+                                    class="landing-btn landing-btn--ghost"
+                                    @click="track('landing_demo', 'header')"
+                                >
                                     Демо доступ
                                 </Link>
                             </div>
-                            <Link href="/login" class="landing-btn landing-btn--primary">
+                            <Link
+                                href="/login"
+                                class="landing-btn landing-btn--primary"
+                                @click="track('landing_login', 'header')"
+                            >
                                 Войти
                             </Link>
                         </template>
@@ -196,7 +215,11 @@ const closePreview = () => {
                             </p>
                             <div class="landing-hero__ctas">
                                 <template v-if="isAuthenticated">
-                                    <Link href="/dashboard" class="landing-btn landing-btn--primary landing-btn--lg">
+                                    <Link
+                                        href="/dashboard"
+                                        class="landing-btn landing-btn--primary landing-btn--lg"
+                                        @click="track('landing_return', 'hero')"
+                                    >
                                         Вернуться в систему
                                     </Link>
                                 </template>
@@ -205,12 +228,16 @@ const closePreview = () => {
                                         <button
                                             type="button"
                                             class="landing-btn landing-btn--primary landing-btn--lg"
-                                            @click="openAccess"
+                                            @click="openAccess('hero')"
                                         >
                                             Запросить доступ
                                         </button>
                                         <span class="landing-or" aria-hidden="true">или</span>
-                                        <Link href="/login?demo=1" class="landing-btn landing-btn--ghost landing-btn--lg">
+                                        <Link
+                                            href="/login?demo=1"
+                                            class="landing-btn landing-btn--ghost landing-btn--lg"
+                                            @click="track('landing_demo', 'hero')"
+                                        >
                                             Демо доступ
                                         </Link>
                                     </div>
@@ -333,7 +360,11 @@ const closePreview = () => {
 
                         <div class="landing-price-actions">
                             <template v-if="isAuthenticated">
-                                <Link href="/dashboard" class="landing-btn landing-btn--primary landing-btn--lg">
+                                <Link
+                                    href="/dashboard"
+                                    class="landing-btn landing-btn--primary landing-btn--lg"
+                                    @click="track('landing_return', 'pricing')"
+                                >
                                     Вернуться в систему
                                 </Link>
                             </template>
@@ -342,12 +373,16 @@ const closePreview = () => {
                                     <button
                                         type="button"
                                         class="landing-btn landing-btn--primary landing-btn--lg"
-                                        @click="openAccess"
+                                        @click="openAccess('pricing')"
                                     >
                                         Запросить доступ
                                     </button>
                                     <span class="landing-or" aria-hidden="true">или</span>
-                                    <Link href="/login?demo=1" class="landing-btn landing-btn--ghost landing-btn--lg">
+                                    <Link
+                                        href="/login?demo=1"
+                                        class="landing-btn landing-btn--ghost landing-btn--lg"
+                                        @click="track('landing_demo', 'pricing')"
+                                    >
                                         Демо доступ
                                     </Link>
                                 </div>
@@ -374,7 +409,11 @@ const closePreview = () => {
                         <p>SkyDesk — для личных и executive-ассистентов, которым нужно всё в одном окне.</p>
                         <div class="landing-hero__ctas landing-hero__ctas--center">
                             <template v-if="isAuthenticated">
-                                <Link href="/dashboard" class="landing-btn landing-btn--primary landing-btn--lg">
+                                <Link
+                                    href="/dashboard"
+                                    class="landing-btn landing-btn--primary landing-btn--lg"
+                                    @click="track('landing_return', 'closing')"
+                                >
                                     Вернуться в систему
                                 </Link>
                             </template>
@@ -383,12 +422,16 @@ const closePreview = () => {
                                     <button
                                         type="button"
                                         class="landing-btn landing-btn--primary landing-btn--lg"
-                                        @click="openAccess"
+                                        @click="openAccess('closing')"
                                     >
                                         Запросить доступ
                                     </button>
                                     <span class="landing-or" aria-hidden="true">или</span>
-                                    <Link href="/login?demo=1" class="landing-btn landing-btn--ghost landing-btn--lg">
+                                    <Link
+                                        href="/login?demo=1"
+                                        class="landing-btn landing-btn--ghost landing-btn--lg"
+                                        @click="track('landing_demo', 'closing')"
+                                    >
                                         Демо доступ
                                     </Link>
                                 </div>

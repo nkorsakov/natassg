@@ -1,8 +1,9 @@
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import vuetify from './plugins/vuetify';
 import { setupOffline } from './offline/setup';
+import { setupMetrikaSpaHits } from './analytics/metrika';
 import '../css/app.css';
 
 const appName = import.meta.env.VITE_APP_NAME || 'SkyDesk';
@@ -12,6 +13,8 @@ if (import.meta.env.PROD) {
         registerSW({ immediate: true });
     });
 }
+
+setupMetrikaSpaHits(router);
 
 createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
