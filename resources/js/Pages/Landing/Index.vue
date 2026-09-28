@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { useTheme } from 'vuetify';
 import AppearanceMenu from '@/Components/AppearanceMenu.vue';
 import { useAppearance } from '@/composables/useAppearance';
@@ -21,12 +21,20 @@ const appUrl = computed(() => {
 });
 
 const accessOpen = ref(false);
-const accessForm = ref({
+const accessForm = useForm({
+    name: '',
     phone: '',
     email: '',
-    password: '',
+    telegram: '',
+    place: '',
+    website: '',
 });
-const accessHint = ref(false);
+const accessSent = ref(false);
+const accessError = computed(() => {
+    const { errors } = accessForm;
+
+    return errors.phone || errors.email || errors.telegram || errors.name || '';
+});
 
 const preview = ref(null);
 
@@ -76,13 +84,22 @@ const track = (goal, place) => {
 
 const openAccess = (place = 'unknown') => {
     track('landing_request_access', place);
-    accessHint.value = false;
+    accessForm.clearErrors();
+    accessForm.place = place;
+    accessSent.value = false;
     accessOpen.value = true;
 };
 
-const submitAccessStub = () => {
-    track('landing_request_submit', 'modal');
-    accessHint.value = true;
+const submitAccess = () => {
+    accessForm.post('/access-request', {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            track('landing_request_submit', accessForm.place);
+            accessForm.reset();
+            accessSent.value = true;
+        },
+    });
 };
 
 const openPreview = (item) => {
@@ -489,52 +506,95 @@ const closePreview = () => {
         >
             <v-card class="landing-access pa-6">
                 <h2 class="landing-access__title">Запросить доступ</h2>
-                <p class="landing-access__sub">
-                    Оставьте контакты — приём заявок скоро откроем.
-                </p>
+                <template v-if="accessSent">
+                    <v-alert
+                        type="success"
+                        variant="tonal"
+                        density="comfortable"
+                        class="mb-4"
+                    >
+                        Заявка отправлена — свяжемся с вами в ближайшее время.
+                    </v-alert>
 
-                <v-text-field
-                    v-model="accessForm.phone"
-                    label="Телефон"
-                    type="tel"
-                    autocomplete="tel"
-                    prepend-inner-icon="mdi-phone-outline"
-                    class="mb-1"
-                    hide-details="auto"
-                />
-                <v-text-field
-                    v-model="accessForm.email"
-                    label="Email"
-                    type="email"
-                    autocomplete="email"
-                    prepend-inner-icon="mdi-email-outline"
-                    class="mb-1"
-                    hide-details="auto"
-                />
-                <v-text-field
-                    v-model="accessForm.password"
-                    label="Пароль"
-                    type="password"
-                    autocomplete="new-password"
-                    prepend-inner-icon="mdi-lock-outline"
-                    class="mb-4"
-                    hide-details="auto"
-                />
+                    <div class="d-flex justify-end">
+                        <v-btn color="primary" @click="accessOpen = false">Готово</v-btn>
+                    </div>
+                </template>
 
-                <v-alert
-                    v-if="accessHint"
-                    type="info"
-                    variant="tonal"
-                    density="comfortable"
-                    class="mb-4"
-                >
-                    Отправка заявок пока не подключена.
-                </v-alert>
+                <form v-else @submit.prevent="submitAccess">
+                    <p class="landing-access__sub">
+                        Оставьте удобный способ связи — напишем и откроем доступ.
+                    </p>
 
-                <div class="d-flex ga-2 justify-end flex-wrap">
-                    <v-btn variant="text" @click="accessOpen = false">Закрыть</v-btn>
-                    <v-btn color="primary" @click="submitAccessStub">Отправить</v-btn>
-                </div>
+                    <v-text-field
+                        v-model="accessForm.name"
+                        label="Имя"
+                        autocomplete="name"
+                        prepend-inner-icon="mdi-account-outline"
+                        class="mb-1"
+                        hide-details="auto"
+                    />
+                    <v-text-field
+                        v-model="accessForm.telegram"
+                        label="Telegram"
+                        placeholder="@username или t.me/username"
+                        prepend-inner-icon="mdi-send-outline"
+                        class="mb-1"
+                        hide-details="auto"
+                        :error="Boolean(accessForm.errors.telegram)"
+                    />
+                    <v-text-field
+                        v-model="accessForm.phone"
+                        label="Телефон"
+                        type="tel"
+                        autocomplete="tel"
+                        prepend-inner-icon="mdi-phone-outline"
+                        class="mb-1"
+                        hide-details="auto"
+                        :error="Boolean(accessForm.errors.phone)"
+                    />
+                    <v-text-field
+                        v-model="accessForm.email"
+                        label="Email"
+                        type="email"
+                        autocomplete="email"
+                        prepend-inner-icon="mdi-email-outline"
+                        class="mb-4"
+                        hide-details="auto"
+                        :error="Boolean(accessForm.errors.email)"
+                    />
+
+                    <input
+                        v-model="accessForm.website"
+                        type="text"
+                        name="website"
+                        tabindex="-1"
+                        autocomplete="off"
+                        aria-hidden="true"
+                        class="landing-access__trap"
+                    >
+
+                    <v-alert
+                        v-if="accessError"
+                        type="error"
+                        variant="tonal"
+                        density="comfortable"
+                        class="mb-4"
+                    >
+                        {{ accessError }}
+                    </v-alert>
+
+                    <div class="d-flex ga-2 justify-end flex-wrap">
+                        <v-btn variant="text" @click="accessOpen = false">Закрыть</v-btn>
+                        <v-btn
+                            type="submit"
+                            color="primary"
+                            :loading="accessForm.processing"
+                        >
+                            Отправить
+                        </v-btn>
+                    </div>
+                </form>
             </v-card>
         </v-dialog>
     </v-app>
@@ -1232,6 +1292,14 @@ const closePreview = () => {
     margin: 8px 0 20px;
     color: rgba(var(--v-theme-on-surface), 0.62);
     font-size: 0.95rem;
+}
+
+.landing-access__trap {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
 }
 
 .landing-lightbox {
